@@ -315,10 +315,12 @@ point `metadataBaseUri` at its hosted directory.
 | Treasury (1% fee recipient) | `7T1fjFsHvo3Q7EpwN5RzgNk8HARdxKnC3tgkavAbBQX7` |
 | Binary SHA-256 | `fd9022b981c7560c93944bfcb9d6c8f680d4f0513ee1f3fc361b89e4190adac3` (verified 19 Nov 2026) |
 
-**The explorer link above will 404 until the deploy lands.** The
-program ID is final (its keypair is stable), but the program is not
-deployed yet: the deploy wallet holds 0 SOL and needs ~3 SOL (program
-rent for a ~200 KB binary plus fees). Fund
+**Deployed to devnet on 19 Nov 2026.** Transaction
+`4RC4UVyowp6Ss9jkKVZQzq35hwaNAKnwg3Sk1xPAFhoWkbp26TLdxL6tjhMqmPXyicE23gtd69GWutNnFj4pakoM`
+([explorer](https://explorer.solana.com/tx/4RC4UVyowp6Ss9jkKVZQzq35hwaNAKnwg3Sk1xPAFhoWkbp26TLdxL6tjhMqmPXyicE23gtd69GWutNnFj4pakoM?cluster=devnet)).
+The deployed binary was verified byte-identical to the local build
+(SHA-256 above). The program ID is final (its keypair is stable). To
+redeploy after a devnet reset, fund
 `7T1fjFsHvo3Q7EpwN5RzgNk8HARdxKnC3tgkavAbBQX7` via the web faucet
 (https://faucet.solana.com), then run one command from the repo root:
 

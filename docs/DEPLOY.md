@@ -107,6 +107,27 @@ solana program deploy --url https://api.devnet.solana.com \
 solana program show --url https://api.devnet.solana.com 3XMFqwbEND9gYWoTahNQPhVoNspHet1PfdizsRymqwNo
 ```
 
+If `solana program deploy` panics with a TPU client error
+(`Should return a valid tpu client: PubsubError ...`), the devnet
+pubsub endpoint is unreachable from the deploy machine. Re-run the
+deploy with `--use-rpc` (sends the deployment through the RPC instead
+of the TPU client):
+
+```sh
+solana program deploy --url https://api.devnet.solana.com \
+  --keypair ~/.config/solana/id.json \
+  --program-id ~/.config/solana/skelsol-market.json \
+  --use-rpc \
+  target/deploy/skelsol_market.so
+```
+
+A failed attempt may leave a funded buffer account behind (~1.05 SOL
+each). List them with `solana program show --buffers --url
+https://api.devnet.solana.com` and reclaim the rent with `solana program
+close --buffers --url https://api.devnet.solana.com --keypair
+~/.config/solana/id.json` (this closes buffers only, never the deployed
+program).
+
 ## Devnet reset
 
 Devnet "may be subject to ledger resets" (Solana clusters doc). A reset
