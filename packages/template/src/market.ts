@@ -12,6 +12,7 @@ import {
   type Network,
 } from "./config.js";
 import { NETWORK_UNREACHABLE_MESSAGE } from "./errors.js";
+import type { MarketStats } from "./ui.js";
 
 /**
  * The market client: build list/buy/cancel transactions against the
@@ -664,6 +665,50 @@ export async function checkMarketDeployed(
 }
 
 /**
+ * The market's deploy state and open listings in one read.
+ */
+export interface MarketState {
+  /** Whether the escrow program is deployed on the network. */
+  deployed: boolean;
+  /** Open listings when deployed, empty when not. */
+  listings: Listing[];
+}
+
+/**
+ * Read the market's deploy state and open listings: whether the escrow
+ * program is deployed on the network, and the open listings when it is.
+ * Throws on an RPC failure, so callers can tell "not deployed" from
+ * "unreachable" instead of misreporting a network failure as a
+ * missing program.
+ */
+export async function readMarketState(
+  connection: MarketConnection,
+  network: Network,
+): Promise<MarketState> {
+  const deployed = await checkMarketDeployed(connection, network);
+  return {
+    deployed,
+    listings: deployed ? await getListings(connection, network) : [],
+  };
+}
+
+/**
+ * The stats row's market numbers from already-fetched listings: how
+ * many are open, and the lowest price as the floor (null when none
+ * are open). Pure: callers that already hold listings use this
+ * instead of fetching them again through {@link getFloorPrice}.
+ */
+export function marketStatsFromListings(listings: Listing[]): MarketStats {
+  let floor: bigint | null = null;
+  for (const listing of listings) {
+    if (floor === null || listing.price < floor) {
+      floor = listing.price;
+    }
+  }
+  return { listings: listings.length, floorLamports: floor };
+}
+
+/**
  * The floor price: the lowest price among currently open listings, or
  * null when no listings are open. See GLOSSARY.md: floor price.
  */
@@ -672,11 +717,6 @@ export async function getFloorPrice(
   network: Network,
 ): Promise<bigint | null> {
   const listings = await getListings(connection, network);
-  let floor: bigint | null = null;
-  for (const listing of listings) {
-    if (floor === null || listing.price < floor) {
-      floor = listing.price;
-    }
-  }
-  return floor;
+  const floor = marketStatsFromListings(listings).floorLamports;
+  return floor === null ? null : BigInt(floor);
 }

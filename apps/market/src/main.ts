@@ -4,20 +4,19 @@ import {
   buildBuyTransaction,
   buildCancelTransaction,
   buildListTransaction,
-  checkMarketDeployed,
   explorerAddressUrl,
   explorerTransactionUrl,
-  getActivity,
-  getCollectionState,
-  getListings,
+  getCollectionOverview,
   GHOST_COLLECTION,
   lookupWallet,
   MarketError,
+  readMarketState,
   shortenAddress,
   timeAgo,
   toMarketConnection,
   toReaderConnection,
   WalletAdapter,
+  withTimeout,
   type ActivityEvent,
   type Listing,
   type Network,
@@ -95,14 +94,16 @@ let pendingList: { mint: PublicKey; price: bigint } | null = null;
 let pendingCancel: Listing | null = null;
 let refreshing = false;
 
+/** How long a refresh may wait on the network before giving up honestly. */
+const REFRESH_TIMEOUT_MS = 30_000;
+/** How long the market read may wait before it is reported unreachable. */
+const MARKET_TIMEOUT_MS = 15_000;
+
 /**
  * One signature cache for the whole app session, shared by every
  * reader call. The reader fetches each transaction once and reuses it
- * across refreshes; only new signatures are fetched. The scans in a
- * refresh run sequentially, not in parallel: a shared map cannot
- * dedupe concurrent fetches, because both would miss the cache at the
- * same time. Cleared on network switch: the two networks have
- * different transactions.
+ * across refreshes; only new signatures are fetched. Cleared on
+ * network switch: the two networks have different transactions.
  */
 const readerCache = new Map<string, ReaderTransaction | null>();
 
@@ -177,24 +178,29 @@ async function refresh(): Promise<void> {
   statsStatus.textContent = "Loading on-chain state…";
   try {
     const connection = readerConnection();
-    // Sequential, sharing one cache: the first scan fetches the recent
-    // memo transactions, the second reuses them instead of fetching
-    // the same transactions again.
-    const state = await getCollectionState(connection, GHOST_COLLECTION, {
-      cache: readerCache,
-    });
-    const activity = await getActivity(connection, GHOST_COLLECTION, {
-      cache: readerCache,
-    });
+    // One scan for both views (ADR 0011): the page used to run two
+    // separate scans, and the memo window slides while they run, so
+    // each scan fetched a mostly new set of transactions.
+    const { state, activity } = await withTimeout(
+      getCollectionOverview(connection, GHOST_COLLECTION, {
+        cache: readerCache,
+      }),
+      REFRESH_TIMEOUT_MS,
+      "The Solana network is slow right now: the page could not load " +
+        "its numbers in time. Check your connection and try Refresh.",
+    );
     renderActivity(activity);
 
     // The market read is isolated: a market failure must not hide the
     // collection stats, which come from the reader and work regardless.
     try {
-      const market = marketConnection();
-      const deployed = await checkMarketDeployed(market, network);
+      const { deployed, listings: open } = await withTimeout(
+        readMarketState(marketConnection(), network),
+        MARKET_TIMEOUT_MS,
+        "The market could not be reached in time.",
+      );
       marketAvailability = deployed ? "deployed" : "not-deployed";
-      listings = deployed ? await getListings(market, network) : [];
+      listings = open;
       marketLoadError = null;
     } catch (error) {
       marketAvailability = "unknown";

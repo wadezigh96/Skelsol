@@ -22,7 +22,10 @@ import {
   feeSplit,
   getFloorPrice,
   getListings,
+  marketStatsFromListings,
+  readMarketState,
   toMarketConnection,
+  type Listing,
   type MarketConnection,
   type MarketProgramAccountsConfig,
 } from "./market.js";
@@ -598,6 +601,47 @@ describe("getListings", () => {
   });
 });
 
+describe("readMarketState", () => {
+  it("reports deployed with the open listings when the program exists", async () => {
+    const connection = new FakeMarketConnection();
+    connection.accountInfo.set(ESCROW_PROGRAM_ID.toBase58(), {
+      data: Buffer.alloc(0),
+    });
+    connection.programAccounts = [
+      {
+        pubkey: LISTING_ADDRESS,
+        account: {
+          data: makeListingBuffer({
+            seller,
+            mint,
+            price: 1_500_000_000n,
+            bump: LISTING_BUMP,
+          }),
+        },
+      },
+    ];
+    const state = await readMarketState(connection, "devnet");
+    expect(state.deployed).toBe(true);
+    expect(state.listings).toHaveLength(1);
+    expect(state.listings[0]?.price).toBe(1_500_000_000n);
+  });
+
+  it("reports not deployed with no listings, without querying program accounts", async () => {
+    const connection = new FakeMarketConnection();
+    const state = await readMarketState(connection, "devnet");
+    expect(state).toEqual({ deployed: false, listings: [] });
+    expect(connection.getProgramAccountsCalls).toHaveLength(0);
+  });
+
+  it("lets an RPC failure through instead of reporting not deployed", async () => {
+    const connection = new FakeMarketConnection();
+    connection.accountInfoError = new Error("RPC is down");
+    await expect(readMarketState(connection, "devnet")).rejects.toThrow(
+      "RPC is down",
+    );
+  });
+});
+
 describe("getFloorPrice", () => {
   it("returns the lowest open price", async () => {
     const seller2 = Keypair.fromSeed(new Uint8Array(32).fill(4)).publicKey;
@@ -956,5 +1000,33 @@ describe("IDL cross-checks", () => {
     expect(idlInstructionDiscriminator("list")).toHaveLength(8);
     expect(idlInstructionDiscriminator("buy")).toHaveLength(8);
     expect(idlInstructionDiscriminator("cancel")).toHaveLength(8);
+  });
+});
+
+describe("marketStatsFromListings", () => {
+  function makeListing(price: bigint): Listing {
+    return {
+      address: LISTING_ADDRESS,
+      seller,
+      mint,
+      price,
+      bump: LISTING_BUMP,
+    };
+  }
+
+  it("counts listings and takes the lowest price as the floor", () => {
+    const stats = marketStatsFromListings([
+      makeListing(2_000_000_000n),
+      makeListing(500_000_000n),
+      makeListing(1_000_000_000n),
+    ]);
+    expect(stats).toEqual({ listings: 3, floorLamports: 500_000_000n });
+  });
+
+  it("returns no floor for an empty list", () => {
+    expect(marketStatsFromListings([])).toEqual({
+      listings: 0,
+      floorLamports: null,
+    });
   });
 });

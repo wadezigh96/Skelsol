@@ -36,9 +36,13 @@ async function main(argv: string[]): Promise<number> {
     return 0;
   }
 
+  // `disableRetryOnRateLimit` makes a 429 fail fast instead of
+  // burning up to ~7.5s inside web3.js's own retry loop: the
+  // reader's bounded retry (and skip-and-count) governs instead.
+  // See ADR 0011.
   const connection = new Connection(
     getNetworkConfig(parsed.network).rpcEndpoint,
-    "confirmed",
+    { commitment: "confirmed", disableRetryOnRateLimit: true },
   );
   const deps: RunDeps = {
     connection,

@@ -5,21 +5,24 @@ import {
   explorerAddressUrl,
   explorerTransactionUrl,
   formatCount,
-  getActivity,
-  getCollectionState,
-  getLeaderboard,
+  getCollectionOverview,
   getMintLimits,
   getNetworkConfig,
   GHOST_COLLECTION,
   lookupWallet,
+  marketStatsFromListings,
+  readMarketState,
   shortenAddress,
   statsViewModel,
   timeAgo,
+  toMarketConnection,
   toReaderConnection,
   WalletAdapter,
+  withTimeout,
   type ActivityEvent,
   type BuildMintTransactionResult,
   type LeaderboardEntry,
+  type MarketStats,
   type MintLimits,
   type Network,
   type ReaderTransaction,
@@ -78,14 +81,16 @@ let network: Network = adapter.network;
 let pendingMint: BuildMintTransactionResult | null = null;
 let refreshing = false;
 
+/** How long a refresh may wait on the network before giving up honestly. */
+const REFRESH_TIMEOUT_MS = 30_000;
+/** How long the market read may wait before it is reported unreachable. */
+const MARKET_TIMEOUT_MS = 15_000;
+
 /**
  * One signature cache for the whole app session, shared by every
  * reader call. The reader fetches each transaction once and reuses it
- * across refreshes; only new signatures are fetched. The scans in a
- * refresh run sequentially, not in parallel: a shared map cannot
- * dedupe concurrent fetches, because all three would miss the cache
- * at the same time. Cleared on network switch: the two networks have
- * different transactions.
+ * across refreshes; only new signatures are fetched. Cleared on
+ * network switch: the two networks have different transactions.
  */
 const readerCache = new Map<string, ReaderTransaction | null>();
 
@@ -96,6 +101,7 @@ const devnetButton = element<HTMLButtonElement>("network-devnet");
 const mainnetButton = element<HTMLButtonElement>("network-mainnet");
 const refreshButton = element<HTMLButtonElement>("refresh-button");
 const statsStatus = element<HTMLElement>("stats-status");
+const marketNoteStatus = element<HTMLElement>("market-note-status");
 const statMinted = element<HTMLElement>("stat-minted");
 const statMinters = element<HTMLElement>("stat-minters");
 const statInscriptions = element<HTMLElement>("stat-inscriptions");
@@ -127,19 +133,42 @@ async function refresh(): Promise<void> {
   statsStatus.textContent = "Loading on-chain state…";
   try {
     const connection = readerConnection();
-    // Sequential, sharing one cache: the first scan fetches the recent
-    // memo transactions, the next two reuse them instead of fetching
-    // the same transactions again.
-    const state = await getCollectionState(connection, GHOST_COLLECTION, {
-      cache: readerCache,
-    });
-    const leaderboard = await getLeaderboard(connection, GHOST_COLLECTION, {
-      cache: readerCache,
-    });
-    const activity = await getActivity(connection, GHOST_COLLECTION, {
-      cache: readerCache,
-    });
-    const stats = statsViewModel(state);
+    // One scan for all three views (ADR 0011): the page used to run
+    // three separate scans, and the memo window slides while they
+    // run, so each scan fetched a mostly new set of transactions.
+    const { state, leaderboard, activity } = await withTimeout(
+      getCollectionOverview(connection, GHOST_COLLECTION, {
+        cache: readerCache,
+      }),
+      REFRESH_TIMEOUT_MS,
+      "The Solana network is slow right now: the page could not load " +
+        "its numbers in time. Check your connection and try Refresh.",
+    );
+
+    // The market read is isolated: a market failure must not hide the
+    // collection stats, which come from the reader and work regardless.
+    // The market note is live, not static copy: it says whether the
+    // market program is deployed on this network right now.
+    let marketStats: MarketStats | undefined;
+    try {
+      const { deployed, listings } = await withTimeout(
+        readMarketState(toMarketConnection(adapter.getConnection()), network),
+        MARKET_TIMEOUT_MS,
+        "The market could not be reached in time.",
+      );
+      if (deployed) {
+        marketStats = marketStatsFromListings(listings);
+        marketNoteStatus.textContent = `The market is live on ${network}.`;
+      } else {
+        marketNoteStatus.textContent =
+          `The market program is not deployed on ${network} yet.`;
+      }
+    } catch {
+      marketNoteStatus.textContent =
+        "Could not reach the market right now.";
+    }
+
+    const stats = statsViewModel(state, marketStats);
     statMinted.textContent = stats.minted;
     statMinters.textContent = stats.minters;
     statInscriptions.textContent = stats.inscriptions;

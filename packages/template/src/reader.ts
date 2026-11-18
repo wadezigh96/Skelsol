@@ -33,9 +33,12 @@ import {
  * retried with backoff when it looks like rate limiting, then skipped
  * and counted, never fatal: only a failed signature listing fails the
  * whole scan. Callers can pass a signature cache so a refresh fetches
- * only new transactions. The reader never trusts client input: every
- * count comes from the chain (or, in tests, from recorded fixture
- * transactions).
+ * only new transactions. Fetches run with bounded concurrency, and
+ * {@link getCollectionOverview} derives state, leaderboard, and
+ * activity from a single scan, so a page refresh makes one pass over
+ * the chain instead of three (see ADR 0011). The reader never trusts
+ * client input: every count comes from the chain (or, in tests, from
+ * recorded fixture transactions).
  *
  * This module is offline-testable: it reads through the minimal
  * {@link ReaderConnection} interface, and tests back it with recorded
@@ -175,6 +178,15 @@ export const DEFAULT_FETCH_ATTEMPTS = 3;
  */
 export const DEFAULT_RETRY_BASE_DELAY_MS = 250;
 
+/**
+ * Default number of transaction fetches in flight at once. The public
+ * RPC answers one fetch in a few hundred milliseconds, so fetching
+ * twenty transactions one at a time costs seconds; five at a time
+ * stays well inside the per-method rate limit while cutting the scan
+ * to a few seconds. See ADR 0011.
+ */
+export const DEFAULT_FETCH_CONCURRENCY = 5;
+
 /** Default number of entries returned by {@link getLeaderboard}. */
 export const DEFAULT_LEADERBOARD_LIMIT = 10;
 
@@ -209,6 +221,13 @@ export interface ReaderOptions {
    * {@link DEFAULT_RETRY_BASE_DELAY_MS}.
    */
   retryBaseDelayMs?: number;
+  /**
+   * Transaction fetches in flight at once. Defaults to
+   * {@link DEFAULT_FETCH_CONCURRENCY}. Fetching is the only parallel
+   * part of a scan: parsing still walks the signatures newest first,
+   * so a duplicate mint keeps its newest record.
+   */
+  fetchConcurrency?: number;
   /**
    * How the reader waits between retries. Defaults to a real timer;
    * tests pass a fake that records the delays instead of waiting, so
@@ -471,6 +490,54 @@ async function fetchTransactionWithRetry(
 }
 
 /**
+ * Fetch a batch of transactions with bounded concurrency: `concurrency`
+ * workers pull signatures from the list until it is empty. Successful
+ * fetches (including null, for pruned transactions) land in the
+ * returned map and in the cache as they complete; a fetch that fails
+ * even after retries is simply absent from the map, never fatal, and
+ * never cached, so a refresh retries it.
+ */
+async function fetchTransactions(
+  connection: ReaderConnection,
+  signatures: string[],
+  maxAttempts: number,
+  baseDelayMs: number,
+  sleep: (ms: number) => Promise<void>,
+  concurrency: number,
+  cache: Map<string, ReaderTransaction | null> | undefined,
+): Promise<Map<string, ReaderTransaction | null>> {
+  const fetched = new Map<string, ReaderTransaction | null>();
+  let next = 0;
+  const workers = Array.from(
+    { length: Math.min(concurrency, signatures.length) },
+    async () => {
+      // `next` is only touched synchronously between awaits, so two
+      // workers never take the same index.
+      while (next < signatures.length) {
+        const index = next;
+        next += 1;
+        const signature = signatures[index] as string;
+        try {
+          const transaction = await fetchTransactionWithRetry(
+            connection,
+            signature,
+            maxAttempts,
+            baseDelayMs,
+            sleep,
+          );
+          fetched.set(signature, transaction);
+          cache?.set(signature, transaction);
+        } catch {
+          // Absent from `fetched`: the caller skips and counts it.
+        }
+      }
+    },
+  );
+  await Promise.all(workers);
+  return fetched;
+}
+
+/**
  * Scan the chain for a collection's inscriptions: list recent memo
  * transactions, fetch each one, and keep the verified inscriptions.
  * Malformed memos are skipped and counted; failed transactions are
@@ -492,6 +559,10 @@ async function scanCollection(
   );
   const retryBaseDelayMs =
     options?.retryBaseDelayMs ?? DEFAULT_RETRY_BASE_DELAY_MS;
+  const fetchConcurrency = Math.max(
+    1,
+    options?.fetchConcurrency ?? DEFAULT_FETCH_CONCURRENCY,
+  );
   const sleep = options?.sleep ?? defaultSleep;
   let signatures: ReaderSignatureInfo[];
   try {
@@ -504,6 +575,29 @@ async function scanCollection(
       cause: error,
     });
   }
+
+  // Fetch the transactions the cache does not have yet, with bounded
+  // concurrency: one fetch costs a few hundred milliseconds against
+  // the public RPC, so twenty sequential fetches cost seconds, and
+  // the memo window slides while they run (each scan's "last 20" is a
+  // mostly new set). Fetching is the only parallel part: parsing
+  // below still walks the signatures newest first.
+  const toFetch = signatures
+    .filter(
+      (info) =>
+        (info.err === null || info.err === undefined) &&
+        cache?.get(info.signature) === undefined,
+    )
+    .map((info) => info.signature);
+  const fetched = await fetchTransactions(
+    connection,
+    toFetch,
+    maxFetchAttempts,
+    retryBaseDelayMs,
+    sleep,
+    fetchConcurrency,
+    cache,
+  );
 
   const byMint = new Map<string, ScannedInscription>();
   let malformedMemos = 0;
@@ -522,24 +616,18 @@ async function scanCollection(
     if (cached !== undefined) {
       // Already fetched on an earlier scan (null means pruned).
       transaction = cached;
+    } else if (fetched.has(info.signature)) {
+      // Fetched in this scan. (Only reachable without a cache: with
+      // one, the fetch phase cached it, so the branch above hit.)
+      transaction = fetched.get(info.signature) ?? null;
     } else {
-      try {
-        transaction = await fetchTransactionWithRetry(
-          connection,
-          info.signature,
-          maxFetchAttempts,
-          retryBaseDelayMs,
-          sleep,
-        );
-      } catch {
-        // One unreadable record must not sink the whole scan: the public
-        // RPC rate-limits bursts of fetches, so a failed fetch is skipped
-        // and counted, and the caller reports it honestly. It is not
-        // cached, so a refresh retries it.
-        failedFetches += 1;
-        continue;
-      }
-      cache?.set(info.signature, transaction);
+      // A fetch that failed even after retries: every fetchable
+      // signature is either fetched or failed, so this is a failed
+      // one. One unreadable record must not sink the whole scan: it
+      // is skipped and counted, and the caller reports it honestly.
+      // It is not cached, so a refresh retries it.
+      failedFetches += 1;
+      continue;
     }
     if (transaction === null || transaction.meta === null) {
       continue;
@@ -625,18 +713,11 @@ function normalizeWallet(wallet: string): string {
   }
 }
 
-/**
- * Count a collection's state from on-chain records: how many
- * inscriptions are minted, how much supply is left, and how many
- * holders there are. Malformed memos and unverified inscriptions are
- * reported, not hidden.
- */
-export async function getCollectionState(
-  connection: ReaderConnection,
+/** Count a collection's state from one scan's verified inscriptions. */
+function stateFromScan(
+  scan: ScanResult,
   config: CollectionConfig,
-  options?: ReaderOptions,
-): Promise<CollectionState> {
-  const scan = await scanCollection(connection, config, options);
+): CollectionState {
   const minted = scan.inscriptions.length;
   const holders = new Set(scan.inscriptions.map((entry) => entry.holder)).size;
   return {
@@ -652,43 +733,27 @@ export async function getCollectionState(
   };
 }
 
-/**
- * The holder leaderboard: wallets ordered by inscription count, most
- * first, ties broken by wallet address so the order is stable.
- */
-export async function getLeaderboard(
-  connection: ReaderConnection,
-  config: CollectionConfig,
-  options?: LeaderboardOptions,
-): Promise<LeaderboardEntry[]> {
-  const scan = await scanCollection(connection, config, options);
+/** The holder leaderboard from one scan's verified inscriptions. */
+function leaderboardFromScan(
+  scan: ScanResult,
+  limit: number,
+): LeaderboardEntry[] {
   const counts = new Map<string, number>();
   for (const entry of scan.inscriptions) {
     counts.set(entry.holder, (counts.get(entry.holder) ?? 0) + 1);
   }
-  const limit = options?.limit ?? DEFAULT_LEADERBOARD_LIMIT;
   return [...counts.entries()]
     .map(([wallet, count]) => ({ wallet, count }))
     .sort((a, b) => b.count - a.count || a.wallet.localeCompare(b.wallet))
     .slice(0, limit);
 }
 
-/**
- * Recent activity, newest first.
- *
- * This release only observes mint events: the inscription library only
- * supports the `mint` operation, and there is no market program yet to
- * produce listing or buy events (ticket 07). Transfer, listing, and buy
- * events are part of the {@link ActivityEventType} shape so the feed can
- * grow into them without changing its callers.
- */
-export async function getActivity(
-  connection: ReaderConnection,
+/** Recent mint activity from one scan's verified inscriptions. */
+function activityFromScan(
+  scan: ScanResult,
   config: CollectionConfig,
-  options?: ActivityOptions,
-): Promise<ActivityEvent[]> {
-  const scan = await scanCollection(connection, config, options);
-  const limit = options?.limit ?? DEFAULT_ACTIVITY_LIMIT;
+  limit: number,
+): ActivityEvent[] {
   return scan.inscriptions
     .map((entry) => ({
       type: "mint" as const,
@@ -701,6 +766,102 @@ export async function getActivity(
     }))
     .sort(byNewestFirst)
     .slice(0, limit);
+}
+
+/**
+ * Count a collection's state from on-chain records: how many
+ * inscriptions are minted, how much supply is left, and how many
+ * holders there are. Malformed memos and unverified inscriptions are
+ * reported, not hidden.
+ */
+export async function getCollectionState(
+  connection: ReaderConnection,
+  config: CollectionConfig,
+  options?: ReaderOptions,
+): Promise<CollectionState> {
+  const scan = await scanCollection(connection, config, options);
+  return stateFromScan(scan, config);
+}
+
+/**
+ * The holder leaderboard: wallets ordered by inscription count, most
+ * first, ties broken by wallet address so the order is stable.
+ */
+export async function getLeaderboard(
+  connection: ReaderConnection,
+  config: CollectionConfig,
+  options?: LeaderboardOptions,
+): Promise<LeaderboardEntry[]> {
+  const scan = await scanCollection(connection, config, options);
+  return leaderboardFromScan(
+    scan,
+    options?.limit ?? DEFAULT_LEADERBOARD_LIMIT,
+  );
+}
+
+/**
+ * Recent activity, newest first.
+ *
+ * This release only observes mint events: the inscription library only
+ * supports the `mint` operation, and the reader does not scan market
+ * program transactions, so listing and buy events are not observed
+ * yet. Transfer, listing, and buy events are part of the
+ * {@link ActivityEventType} shape so the feed can grow into them
+ * without changing its callers.
+ */
+export async function getActivity(
+  connection: ReaderConnection,
+  config: CollectionConfig,
+  options?: ActivityOptions,
+): Promise<ActivityEvent[]> {
+  const scan = await scanCollection(connection, config, options);
+  return activityFromScan(
+    scan,
+    config,
+    options?.limit ?? DEFAULT_ACTIVITY_LIMIT,
+  );
+}
+
+/**
+ * State, leaderboard, and activity from a single scan: one signature
+ * listing and one set of transaction fetches, shared by all three
+ * views. A page refresh used to run three separate scans, and the memo
+ * window slides while they run, so each scan fetched a mostly new set
+ * of transactions (about 30 seconds on the public devnet RPC under
+ * load, and longer where the RPC rate-limits harder). See ADR 0011.
+ */
+export interface CollectionOverview {
+  state: CollectionState;
+  leaderboard: LeaderboardEntry[];
+  activity: ActivityEvent[];
+}
+
+/** Options for {@link getCollectionOverview}. */
+export interface OverviewOptions extends ReaderOptions {
+  /** Maximum leaderboard entries. Defaults to {@link DEFAULT_LEADERBOARD_LIMIT}. */
+  leaderboardLimit?: number;
+  /** Maximum activity events. Defaults to {@link DEFAULT_ACTIVITY_LIMIT}. */
+  activityLimit?: number;
+}
+
+export async function getCollectionOverview(
+  connection: ReaderConnection,
+  config: CollectionConfig,
+  options?: OverviewOptions,
+): Promise<CollectionOverview> {
+  const scan = await scanCollection(connection, config, options);
+  return {
+    state: stateFromScan(scan, config),
+    leaderboard: leaderboardFromScan(
+      scan,
+      options?.leaderboardLimit ?? DEFAULT_LEADERBOARD_LIMIT,
+    ),
+    activity: activityFromScan(
+      scan,
+      config,
+      options?.activityLimit ?? DEFAULT_ACTIVITY_LIMIT,
+    ),
+  };
 }
 
 /**

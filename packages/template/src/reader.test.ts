@@ -18,6 +18,7 @@ import {
 } from "./config.js";
 import {
   getActivity,
+  getCollectionOverview,
   getCollectionState,
   getLeaderboard,
   getMintLimits,
@@ -182,6 +183,20 @@ class FakeConnection implements ReaderConnection {
 
   /** Add a signature whose transaction is gone (pruned), like live RPC. */
   addPrunedSignature(signature: string): void {
+    this.order.push(signature);
+  }
+
+  /**
+   * Add a raw transaction under a signature of the caller's choosing,
+   * as if a second transaction carried the same content (a duplicate
+   * mint). The reader never cross-checks the transaction's own
+   * signature list against the signature it was fetched under.
+   */
+  addRawTransaction(
+    signature: string,
+    transaction: ReaderTransaction,
+  ): void {
+    this.transactions.set(signature, transaction);
     this.order.push(signature);
   }
 
@@ -400,6 +415,102 @@ describe("fetch retries", () => {
   });
 });
 
+/** Wait until a condition holds, or fail after the timeout. */
+async function waitFor(
+  condition: () => boolean,
+  timeoutMs = 5000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!condition()) {
+    if (Date.now() > deadline) {
+      throw new Error("Timed out waiting for the condition.");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+/** A fake whose fetches all wait on one gate, tracking in-flight count. */
+class GatedConnection extends FakeConnection {
+  inFlight = 0;
+  maxInFlight = 0;
+  private releaseGate: () => void = () => {};
+  private readonly gate = new Promise<void>((resolve) => {
+    this.releaseGate = resolve;
+  });
+
+  override async getTransaction(
+    signature: string,
+  ): Promise<ReaderTransaction | null> {
+    this.inFlight += 1;
+    this.maxInFlight = Math.max(this.maxInFlight, this.inFlight);
+    try {
+      await this.gate;
+      return await super.getTransaction(signature);
+    } finally {
+      this.inFlight -= 1;
+    }
+  }
+
+  releaseAll(): void {
+    this.releaseGate();
+  }
+}
+
+/** A fake whose fetches wait on a per-signature gate, released by hand. */
+class OrderReleasingConnection extends FakeConnection {
+  private readonly gates = new Map<string, () => void>();
+
+  override async getTransaction(
+    signature: string,
+  ): Promise<ReaderTransaction | null> {
+    await new Promise<void>((resolve) => {
+      this.gates.set(signature, resolve);
+    });
+    return super.getTransaction(signature);
+  }
+
+  /** How many fetches are currently waiting on their gate. */
+  get pendingFetches(): number {
+    return this.gates.size;
+  }
+
+  release(signature: string): void {
+    this.gates.get(signature)?.();
+  }
+}
+
+describe("parallel fetches", () => {
+  it("fetches transactions concurrently, bounded by fetchConcurrency", async () => {
+    const connection = new GatedConnection(ALL_FIXTURES);
+    const pending = getCollectionState(connection, GHOST_COLLECTION, {
+      fetchConcurrency: 3,
+    });
+    // The pool fills before any fetch completes: the gate holds all three.
+    await waitFor(() => connection.maxInFlight >= 3);
+    expect(connection.maxInFlight).toBeLessThanOrEqual(3);
+    connection.releaseAll();
+    const state = await pending;
+    expect(connection.maxInFlight).toBeLessThanOrEqual(3);
+    expect(state.minted).toBe(3);
+    expect(state.failedFetches).toBe(0);
+  });
+
+  it("keeps the newest record for a duplicate mint even when the older fetch finishes first", async () => {
+    const { transaction } = loadFixture("mint-alice-1.json");
+    const connection = new OrderReleasingConnection([]);
+    connection.addRawTransaction(SIG_ALICE_1, transaction);
+    connection.addRawTransaction(SIG_ALICE_2, transaction);
+    const pending = getActivity(connection, GHOST_COLLECTION);
+    await waitFor(() => connection.pendingFetches >= 2);
+    // The older fetch finishes first; the scan must still keep the newest.
+    connection.release(SIG_ALICE_2);
+    connection.release(SIG_ALICE_1);
+    const activity = await pending;
+    expect(activity).toHaveLength(1);
+    expect(activity[0]?.signature).toBe(SIG_ALICE_1);
+  });
+});
+
 describe("signature cache", () => {
   it("a second scan with a shared cache fetches only new signatures", async () => {
     const connection = new FakeConnection(["mint-alice-1.json"]);
@@ -588,6 +699,40 @@ describe("getActivity", () => {
     const connection = new FakeConnection([]);
     const activity = await getActivity(connection, GHOST_COLLECTION);
     expect(activity).toEqual([]);
+  });
+});
+
+describe("getCollectionOverview", () => {
+  it("lists signatures once and derives state, leaderboard, and activity from the same scan", async () => {
+    const connection = new FakeConnection(ALL_FIXTURES);
+    const overview = await getCollectionOverview(connection, GHOST_COLLECTION);
+
+    expect(connection.queriedAddresses).toHaveLength(1);
+
+    const stateConnection = new FakeConnection(ALL_FIXTURES);
+    const leaderboardConnection = new FakeConnection(ALL_FIXTURES);
+    const activityConnection = new FakeConnection(ALL_FIXTURES);
+    await expect(
+      getCollectionState(stateConnection, GHOST_COLLECTION),
+    ).resolves.toEqual(overview.state);
+    await expect(
+      getLeaderboard(leaderboardConnection, GHOST_COLLECTION),
+    ).resolves.toEqual(overview.leaderboard);
+    await expect(
+      getActivity(activityConnection, GHOST_COLLECTION),
+    ).resolves.toEqual(overview.activity);
+  });
+
+  it("respects the leaderboard and activity limits", async () => {
+    const connection = new FakeConnection(ALL_FIXTURES);
+    const overview = await getCollectionOverview(connection, GHOST_COLLECTION, {
+      leaderboardLimit: 1,
+      activityLimit: 1,
+    });
+
+    expect(overview.leaderboard).toHaveLength(1);
+    expect(overview.activity).toHaveLength(1);
+    expect(overview.state.minted).toBe(3);
   });
 });
 

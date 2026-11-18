@@ -5,9 +5,11 @@ in `.scratch/skelsol/issues/`; work the frontier (any task whose blockers
 are done). All work is TDD: one red-green slice at a time, at the seams in
 `design.md`.
 
-Status (19 November 2026): tickets 01–11 are done. Only the devnet deploy
-step (7.3) is still open, waiting on ~3 SOL of funding for the deploy
-wallet (see `docs/DEPLOY.md`).
+Status (19 November 2026): tickets 01–11 are done, including the
+devnet deploy (7.3, deployed 19 Nov 2026; see `docs/DEPLOY.md`).
+Both demo apps are hosted on Vercel. Follow-up fix after launch:
+the page refresh was too slow on the public RPC (ADR 0011: one scan
+per refresh, parallel fetches, fast-fail 429s).
 
 - [x] 1. Template inscription library (ticket 01)
   - [x] 1.1 Build/parse/verify SPL-20-style JSON, with the `mint` binding field
@@ -40,7 +42,7 @@ wallet (see `docs/DEPLOY.md`).
 - [ ] 7. Escrow program (ticket 07, blocked by Anchor toolchain approval)
   - [x] 7.1 Anchor program: `list`, `buy`, `cancel` (SOL leg, 1% fee)
   - [x] 7.2 Anchor tests: happy paths, seller-only cancel, wrong-price rejection
-  - [ ] 7.3 Deploy to devnet; record program ID in `docs/DEPLOY.md`
+  - [x] 7.3 Deploy to devnet; record program ID in `docs/DEPLOY.md` (deployed 19 Nov 2026)
 - [x] 8. Template market client (ticket 08, blocked by 2, 7)
   - [x] 8.1 Build list/buy/cancel transactions
   - [x] 8.2 Read open listings from program accounts; floor price
