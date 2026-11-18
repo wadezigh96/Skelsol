@@ -330,6 +330,17 @@ reset notes — are in `docs/DEPLOY.md`. The program has never been
 deployed to mainnet, and the deploy script refuses to run against any
 cluster but devnet.
 
+### Dedicated devnet RPC
+
+The demo sites support a dedicated devnet RPC endpoint (Helius free
+tier) instead of the shared public endpoint, which rate-limited the
+pages during the live-browser checks (see ADR 0012). Set
+`SKELSOL_DEVNET_RPC_URL` in the Vercel dashboard for both projects
+(the URL carries the provider's API key, so it never appears in this
+repo). Without it, the sites fall back to the public endpoint. The
+CLI reads the same variable (and `SKELSOL_MAINNET_RPC_URL`) from its
+own environment.
+
 ### On-chain addresses
 
 | | |

@@ -1,6 +1,10 @@
 # Dependencies
 node_modules/
 
+# Local environment (may carry RPC API keys; never committed)
+.env
+.env.*
+
 # Build output
 dist/
 build/

@@ -1,11 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   DEFAULT_NETWORK,
   GHOST_COLLECTION,
+  clearRpcEndpointOverrides,
   getEscrowProgramId,
   getNetworkConfig,
   loadCollectionConfig,
+  setRpcEndpointOverride,
 } from "./config.js";
 
 describe("loadCollectionConfig", () => {
@@ -265,6 +267,64 @@ describe("getNetworkConfig", () => {
     expect(() =>
       getNetworkConfig("testnet" as "devnet"),
     ).toThrowError(/unknown network "testnet"/);
+  });
+});
+
+describe("RPC endpoint overrides", () => {
+  afterEach(() => {
+    clearRpcEndpointOverrides();
+  });
+
+  it("uses the override endpoint for the network it was set on", () => {
+    setRpcEndpointOverride(
+      "devnet",
+      "https://devnet.helius-rpc.com/?api-key=test-key",
+    );
+
+    expect(getNetworkConfig("devnet").rpcEndpoint).toBe(
+      "https://devnet.helius-rpc.com/?api-key=test-key",
+    );
+    // The other network is untouched.
+    expect(getNetworkConfig("mainnet").rpcEndpoint).toBe(
+      "https://api.mainnet.solana.com",
+    );
+  });
+
+  it("keeps the rest of the network config when overriding", () => {
+    setRpcEndpointOverride("devnet", "https://example.com/rpc");
+
+    const config = getNetworkConfig("devnet");
+    expect(config.network).toBe("devnet");
+    expect(config.escrowProgramId).toBe(
+      "3XMFqwbEND9gYWoTahNQPhVoNspHet1PfdizsRymqwNo",
+    );
+    expect(config.memoProgramId).toBe(
+      "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
+    );
+  });
+
+  it("rejects an override that is not a URL", () => {
+    expect(() =>
+      setRpcEndpointOverride("devnet", "not a url"),
+    ).toThrowError(/not a URL/);
+    expect(getNetworkConfig("devnet").rpcEndpoint).toBe(
+      "https://api.devnet.solana.com",
+    );
+  });
+
+  it("rejects an override that is not http(s)", () => {
+    expect(() =>
+      setRpcEndpointOverride("devnet", "ws://example.com/rpc"),
+    ).toThrowError(/http/);
+  });
+
+  it("restores the public endpoint when overrides are cleared", () => {
+    setRpcEndpointOverride("devnet", "https://example.com/rpc");
+    clearRpcEndpointOverrides();
+
+    expect(getNetworkConfig("devnet").rpcEndpoint).toBe(
+      "https://api.devnet.solana.com",
+    );
   });
 });
 

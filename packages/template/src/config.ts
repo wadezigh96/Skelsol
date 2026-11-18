@@ -248,8 +248,50 @@ const NETWORK_CONFIGS: Record<Network, NetworkConfig> = {
 };
 
 /**
+ * Per-network RPC endpoint overrides, set by the host at startup and
+ * applied by {@link getNetworkConfig}. The demo apps call
+ * {@link setRpcEndpointOverride} with the endpoint their build
+ * injected (a dedicated RPC URL from an environment variable, see
+ * ADR 0012); the CLI reads its own environment variables and calls
+ * it too. Without an override, the public endpoint above is used.
+ * The override is validated like any endpoint: it must be an http(s)
+ * URL, so a typo fails at startup instead of mid-scan.
+ */
+const rpcEndpointOverrides = new Map<Network, string>();
+
+/**
+ * Override the RPC endpoint for a network, for the lifetime of the
+ * page (or process). Throws a `ConfigError` for a value that is not
+ * an http(s) URL, and leaves any previous override untouched.
+ */
+export function setRpcEndpointOverride(network: Network, url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new ConfigError(
+      `Invalid RPC endpoint for "${network}": "${url}" is not a URL.`,
+    );
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new ConfigError(
+      `Invalid RPC endpoint for "${network}": "${url}" is not an ` +
+        `http(s) URL.`,
+    );
+  }
+  rpcEndpointOverrides.set(network, url);
+}
+
+/** Clear all RPC endpoint overrides, restoring the public endpoints. */
+export function clearRpcEndpointOverrides(): void {
+  rpcEndpointOverrides.clear();
+}
+
+/**
  * Return the config for a network. Throws a `ConfigError` for an unknown
- * network name.
+ * network name. When an endpoint override was set for the network, the
+ * returned config carries the override endpoint (as a copy, so the
+ * shared default is never mutated).
  */
 export function getNetworkConfig(network: Network): NetworkConfig {
   const config = NETWORK_CONFIGS[network];
@@ -259,7 +301,10 @@ export function getNetworkConfig(network: Network): NetworkConfig {
         `Supported networks: devnet, mainnet.`,
     );
   }
-  return config;
+  const override = rpcEndpointOverrides.get(network);
+  return override === undefined
+    ? config
+    : { ...config, rpcEndpoint: override };
 }
 
 /**

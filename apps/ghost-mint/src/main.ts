@@ -12,6 +12,7 @@ import {
   lookupWallet,
   marketStatsFromListings,
   readMarketState,
+  setRpcEndpointOverride,
   shortenAddress,
   statsViewModel,
   timeAgo,
@@ -34,6 +35,7 @@ import {
   lookupSummary,
   mintAllowanceText,
 } from "./view.js";
+import { SITE_CONFIG } from "./site-config.js";
 
 /**
  * Ghost Mint: the page wiring. Owns the DOM, the wallet adapter, and
@@ -74,6 +76,13 @@ function friendlyMessage(error: unknown): string {
   return error instanceof Error
     ? error.message
     : "Something went wrong. Try again.";
+}
+
+// A dedicated RPC endpoint comes from the build (an environment
+// variable at build time, never from the repo). Without it, the
+// public endpoint is used. See ADR 0012.
+if (SITE_CONFIG.devnetRpcUrl !== null) {
+  setRpcEndpointOverride("devnet", SITE_CONFIG.devnetRpcUrl);
 }
 
 const adapter = new WalletAdapter();
