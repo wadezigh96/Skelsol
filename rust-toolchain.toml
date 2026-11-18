@@ -1,0 +1,11 @@
+# Host toolchain for the Anchor workspace (IDL build, `cargo test`).
+# The anchor-cli 1.2.2 scaffold pins 1.89.0, but that breaks the IDL build:
+# solana-syscalls 4.2.2 (a transitive dependency of anchor-lang 1.2.2) uses
+# `MaybeUninit::write_copy_of_slice`, which was only stabilized in Rust
+# 1.93. On 1.89 the IDL build fails with E0658 (unstable library feature).
+# The SBF program build itself is unaffected: it uses the platform-tools
+# Rust (1.95.0-sbpf), not this toolchain.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

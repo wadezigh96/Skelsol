@@ -1,0 +1,1 @@
+{"dependencies":{"@skelsol/template":"0.1.0","@solana/web3.js":"1.99.0"},"description":"Inscription Market: fixed-price marketplace for Skelsol inscriptions.","name":"@skelsol/market","private":true,"scripts":{"build":"tsc --build --force ../../packages/template . && node build.mjs","test":"vitest run"},"type":"module","version":"0.1.0"}

@@ -1,0 +1,380 @@
+/* Skelsol spooky UI kit: the Vision visual style (ADR 0009).
+ *
+ * Palette: near-black background, maroon accent, white text. Dark
+ * throughout: no orange, no white background sections. Shared by both
+ * web apps, so they look like siblings by construction.
+ *
+ * Components: top bar, hero with giant display type, numbered
+ * sections, vertical edge text, stats row, tables, forms, buttons.
+ */
+
+:root {
+  --skel-bg: #0a0a0a;
+  --skel-bg-raised: #141414;
+  --skel-accent: #7f1d1d;
+  --skel-accent-bright: #b91c1c;
+  --skel-text: #ffffff;
+  --skel-muted: rgba(255, 255, 255, 0.6);
+  --skel-faint: rgba(255, 255, 255, 0.14);
+  --skel-line: rgba(255, 255, 255, 0.16);
+  --skel-display-font: "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --skel-body-font: "Helvetica Neue", Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--skel-bg);
+  color: var(--skel-text);
+  font-family: var(--skel-body-font);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--skel-text);
+}
+
+/* ---- Top bar ---------------------------------------------------- */
+
+.skel-topbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 2rem;
+  border-bottom: 1px solid var(--skel-line);
+  position: sticky;
+  top: 0;
+  background: var(--skel-bg);
+  z-index: 10;
+}
+
+.skel-wordmark {
+  font-family: var(--skel-display-font);
+  font-weight: 900;
+  font-size: 1.25rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-right: auto;
+}
+
+.skel-wordmark em {
+  font-style: normal;
+  color: var(--skel-accent-bright);
+}
+
+.skel-network-switch {
+  display: flex;
+  border: 1px solid var(--skel-line);
+}
+
+.skel-network-switch button {
+  background: transparent;
+  color: var(--skel-muted);
+  border: 0;
+  padding: 0.4rem 0.8rem;
+  font: inherit;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.skel-network-switch button[aria-pressed="true"] {
+  background: var(--skel-accent);
+  color: var(--skel-text);
+}
+
+/* ---- Hero -------------------------------------------------------- */
+
+.skel-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 4rem 2rem 3rem;
+  border-bottom: 1px solid var(--skel-line);
+}
+
+.skel-hero-art {
+  position: absolute;
+  right: 2rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(38vw, 420px);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+/* Maroon glow behind the hero art (the art itself is inline SVG). */
+.skel-hero-art .skel-glow {
+  filter: drop-shadow(0 0 24px var(--skel-accent-bright))
+    drop-shadow(0 0 64px var(--skel-accent));
+}
+
+.skel-display {
+  font-family: var(--skel-display-font);
+  font-weight: 900;
+  font-size: clamp(3.5rem, 12vw, 10rem);
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  margin: 0;
+  position: relative;
+}
+
+.skel-display .skel-display-accent {
+  color: var(--skel-accent-bright);
+}
+
+.skel-hero-tagline {
+  color: var(--skel-muted);
+  max-width: 34rem;
+  margin: 1.5rem 0 0;
+  position: relative;
+}
+
+/* ---- Numbered sections ------------------------------------------- */
+
+.skel-section {
+  padding: 3rem 2rem;
+  border-bottom: 1px solid var(--skel-line);
+  position: relative;
+}
+
+.skel-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin: 0 0 2rem;
+}
+
+.skel-section-number {
+  font-family: var(--skel-display-font);
+  font-weight: 900;
+  font-size: 1rem;
+  color: var(--skel-accent-bright);
+}
+
+.skel-section-label {
+  font-family: var(--skel-display-font);
+  font-weight: 900;
+  font-size: 2rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ---- Vertical edge text ------------------------------------------ */
+
+.skel-vertical {
+  position: absolute;
+  right: 0.5rem;
+  top: 3rem;
+  writing-mode: vertical-rl;
+  font-family: var(--skel-display-font);
+  font-weight: 900;
+  font-size: 1.5rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--skel-faint);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ---- Stats row ----------------------------------------------------- */
+
+.skel-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0;
+  border: 1px solid var(--skel-line);
+}
+
+.skel-stat {
+  padding: 1.5rem;
+  border-right: 1px solid var(--skel-line);
+}
+
+.skel-stat:last-child {
+  border-right: 0;
+}
+
+.skel-stat-value {
+  font-family: var(--skel-display-font);
+  font-weight: 900;
+  font-size: 2.25rem;
+  line-height: 1;
+  display: block;
+}
+
+.skel-stat-label {
+  color: var(--skel-muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  display: block;
+  margin-top: 0.5rem;
+}
+
+/* ---- Tables -------------------------------------------------------- */
+
+.skel-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.skel-table th,
+.skel-table td {
+  text-align: left;
+  padding: 0.75rem 0.5rem;
+  border-bottom: 1px solid var(--skel-line);
+}
+
+.skel-table th {
+  color: var(--skel-muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.skel-table td:first-child,
+.skel-table th:first-child {
+  padding-left: 0;
+}
+
+.skel-mono {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.85em;
+}
+
+/* ---- Forms and buttons --------------------------------------------- */
+
+.skel-input {
+  background: var(--skel-bg-raised);
+  color: var(--skel-text);
+  border: 1px solid var(--skel-line);
+  padding: 0.7rem 1rem;
+  font: inherit;
+  width: 100%;
+  max-width: 32rem;
+}
+
+.skel-input::placeholder {
+  color: var(--skel-muted);
+}
+
+.skel-input:focus {
+  outline: 1px solid var(--skel-accent-bright);
+  border-color: var(--skel-accent-bright);
+}
+
+.skel-btn {
+  background: var(--skel-accent);
+  color: var(--skel-text);
+  border: 1px solid var(--skel-accent);
+  padding: 0.7rem 1.5rem;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.skel-btn:hover:not(:disabled) {
+  background: var(--skel-accent-bright);
+  border-color: var(--skel-accent-bright);
+}
+
+.skel-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.skel-btn-ghost {
+  background: transparent;
+  border-color: var(--skel-line);
+}
+
+.skel-btn-ghost:hover:not(:disabled) {
+  background: var(--skel-bg-raised);
+  border-color: var(--skel-line);
+}
+
+.skel-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+/* ---- Notes, status, activity --------------------------------------- */
+
+.skel-note {
+  color: var(--skel-muted);
+  font-size: 0.9rem;
+}
+
+.skel-status {
+  border: 1px solid var(--skel-line);
+  padding: 1rem 1.25rem;
+  margin-top: 1rem;
+  background: var(--skel-bg-raised);
+}
+
+.skel-status:empty {
+  display: none;
+}
+
+.skel-activity {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.skel-activity li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--skel-line);
+}
+
+.skel-activity time {
+  color: var(--skel-muted);
+  font-size: 0.85rem;
+}
+
+.skel-empty {
+  color: var(--skel-muted);
+  padding: 1rem 0;
+}
+
+.skel-footer {
+  padding: 2rem;
+  color: var(--skel-muted);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 640px) {
+  .skel-hero-art {
+    position: static;
+    transform: none;
+    width: 12rem;
+    margin-bottom: 1rem;
+  }
+
+  .skel-topbar,
+  .skel-hero,
+  .skel-section,
+  .skel-footer {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .skel-vertical {
+    display: none;
+  }
+}

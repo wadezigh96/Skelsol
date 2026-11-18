@@ -1,0 +1,1 @@
+{"bin":{"skel":"./dist/cli.js"},"dependencies":{"@skelsol/template":"0.1.0","@solana/web3.js":"1.99.0"},"description":"skel: command-line interface for AI agents to use Skelsol.","name":"skel","private":true,"scripts":{"build":"tsc --build && chmod +x dist/cli.js","test":"vitest run"},"type":"module","version":"0.1.0"}

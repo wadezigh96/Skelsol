@@ -1,0 +1,30 @@
+{
+  "attributes": [
+    {
+      "trait_type": "Collection",
+      "value": "Spooky Ghosts"
+    },
+    {
+      "trait_type": "Tick",
+      "value": "GHOST"
+    },
+    {
+      "trait_type": "Inscription",
+      "value": "SPL-20-style memo"
+    }
+  ],
+  "description": "A ghost inscription from Skelsol's GHOST collection: one SPL-20-style inscription written on-chain in a Solana transaction memo, carried by this NFT. Minted with the Skelsol template.",
+  "image": "ghost.svg",
+  "name": "Spooky Ghosts",
+  "properties": {
+    "category": "image",
+    "files": [
+      {
+        "type": "image/svg+xml",
+        "uri": "ghost.svg"
+      }
+    ]
+  },
+  "seller_fee_basis_points": 0,
+  "symbol": "GHOST"
+}

@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+# Stray compiler output inside source trees (a misconfigured tsc run can
+# emit these next to the .ts files; they must never be committed)
+src/**/*.js
+src/**/*.d.ts
+src/**/*.js.map
+src/**/*.d.ts.map
+
+# Anchor / Solana
+target/
+test-ledger/
+.anchor/
+.DS_Store
+
+# NEVER commit keypairs or secrets. A keypair file controls a wallet.
+id.json
+*-keypair.json
+**/*-keypair.json
+keypair.json
+**/keypair.json
+.env
+.env.*
+!.env.example
+
+# Editor
+.vscode/
+.idea/

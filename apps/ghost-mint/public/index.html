@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ghost Mint — Skelsol</title>
+    <meta
+      name="description"
+      content="Mint GHOST inscriptions on Solana. Live stats, wallet lookup, minter leaderboard, and live activity."
+    />
+    <link rel="stylesheet" href="./spooky.css" />
+    <!-- Pinned dependency versions (ADR 0008). Never @latest: web3.js
+         1.95.6/1.95.7 were compromised. A version bump is a deliberate
+         change, made here and in package.json together. -->
+    <script type="importmap">
+      {
+        "imports": {
+          "@solana/web3.js": "https://esm.sh/@solana/web3.js@1.99.0",
+          "@metaplex-foundation/umi": "https://esm.sh/@metaplex-foundation/umi@1.6.0",
+          "@metaplex-foundation/umi-bundle-defaults": "https://esm.sh/@metaplex-foundation/umi-bundle-defaults@1.6.0",
+          "@metaplex-foundation/mpl-token-metadata": "https://esm.sh/@metaplex-foundation/mpl-token-metadata@4.0.0",
+          "@metaplex-foundation/umi-web3js-adapters": "https://esm.sh/@metaplex-foundation/umi-web3js-adapters@1.6.0",
+          "@wallet-standard/app": "https://esm.sh/@wallet-standard/app@1.1.1",
+          "@solana/wallet-standard-features": "https://esm.sh/@solana/wallet-standard-features@1.5.0",
+          "@skelsol/template": "./template/index.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <header class="skel-topbar">
+      <span class="skel-wordmark">Skel<em>sol</em></span>
+      <div
+        class="skel-network-switch"
+        role="group"
+        aria-label="Network"
+      >
+        <button id="network-devnet" type="button" aria-pressed="true">
+          Devnet
+        </button>
+        <button id="network-mainnet" type="button" aria-pressed="false">
+          Mainnet
+        </button>
+      </div>
+      <button id="wallet-button" class="skel-btn skel-btn-ghost" type="button">
+        Connect wallet
+      </button>
+    </header>
+    <div id="wallet-picker" class="skel-section" hidden>
+      <p class="skel-note">Choose a wallet to connect:</p>
+      <div id="wallet-picker-list" class="skel-form-row"></div>
+    </div>
+
+    <main>
+      <section class="skel-hero">
+        <span class="skel-vertical" aria-hidden="true">/ghost mint</span>
+        <!-- Original line art drawn for Skelsol: a ghost under a crescent
+             moon. No external images, no copied assets. -->
+        <svg
+          class="skel-hero-art"
+          viewBox="0 0 200 220"
+          role="img"
+          aria-label="A ghost under a crescent moon"
+        >
+          <g class="skel-glow" fill="none" stroke="#ffffff" stroke-width="3">
+            <path
+              d="M165 28 A28 28 0 1 0 165 84 A22 22 0 1 1 165 28 Z"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M100 25 C62 25 42 58 42 98 L42 178 L61 162 L80 178 L100 162 L120 178 L139 162 L158 178 L158 98 C158 58 138 25 100 25 Z"
+              fill="#160505"
+              stroke-linejoin="round"
+            />
+          </g>
+          <g fill="#ffffff">
+            <ellipse cx="82" cy="95" rx="7" ry="10" />
+            <ellipse cx="118" cy="95" rx="7" ry="10" />
+            <ellipse cx="100" cy="125" rx="8" ry="11" />
+            <circle cx="28" cy="40" r="2.5" />
+            <circle cx="175" cy="130" r="2.5" />
+            <circle cx="20" cy="120" r="2" />
+          </g>
+        </svg>
+        <h1 class="skel-display">
+          Ghost<br /><span class="skel-display-accent">Mint</span>
+        </h1>
+        <p class="skel-hero-tagline">
+          Mint GHOST inscriptions on Solana. Free mint, rent only: one
+          inscription plus its carrier NFT, written on-chain in a single
+          transaction. Devnet by default, so trying it costs nothing.
+        </p>
+      </section>
+
+      <section class="skel-section" aria-labelledby="stats-heading">
+        <div class="skel-section-head">
+          <span class="skel-section-number">01</span>
+          <h2 id="stats-heading" class="skel-section-label">/Stats</h2>
+        </div>
+        <div class="skel-stats">
+          <div class="skel-stat">
+            <span id="stat-minted" class="skel-stat-value">—</span>
+            <span class="skel-stat-label">Minted</span>
+          </div>
+          <div class="skel-stat">
+            <span id="stat-minters" class="skel-stat-value">—</span>
+            <span class="skel-stat-label">Minters</span>
+          </div>
+          <div class="skel-stat">
+            <span id="stat-inscriptions" class="skel-stat-value">—</span>
+            <span class="skel-stat-label">Inscriptions</span>
+          </div>
+          <div class="skel-stat">
+            <span id="stat-listings" class="skel-stat-value">—</span>
+            <span class="skel-stat-label">Listings</span>
+          </div>
+          <div class="skel-stat">
+            <span id="stat-floor" class="skel-stat-value">—</span>
+            <span class="skel-stat-label">Floor</span>
+          </div>
+        </div>
+        <p class="skel-note">
+          Listings and floor price come from the Inscription Market, which
+          is coming soon: the market program is not deployed yet, so there
+          are no listings to show.
+        </p>
+        <p class="skel-form-row">
+          <button id="refresh-button" class="skel-btn skel-btn-ghost" type="button">
+            Refresh
+          </button>
+          <span id="stats-status" class="skel-note" role="status"></span>
+        </p>
+      </section>
+
+      <section class="skel-section" aria-labelledby="lookup-heading">
+        <div class="skel-section-head">
+          <span class="skel-section-number">02</span>
+          <h2 id="lookup-heading" class="skel-section-label">/Lookup</h2>
+        </div>
+        <p class="skel-note">
+          Check any wallet's GHOST inscriptions. Paste a Solana wallet
+          address below.
+        </p>
+        <div class="skel-form-row">
+          <input
+            id="lookup-input"
+            class="skel-input skel-mono"
+            type="text"
+            placeholder="Wallet address"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button id="lookup-button" class="skel-btn" type="button">
+            Look up
+          </button>
+        </div>
+        <div id="lookup-result" class="skel-status" role="status"></div>
+      </section>
+
+      <section class="skel-section" aria-labelledby="mint-heading">
+        <div class="skel-section-head">
+          <span class="skel-section-number">03</span>
+          <h2 id="mint-heading" class="skel-section-label">/Mint</h2>
+        </div>
+        <p id="mint-allowance" class="skel-note">
+          Connect a wallet to see your allowance.
+        </p>
+        <div class="skel-form-row">
+          <button id="mint-button" class="skel-btn" type="button" disabled>
+            Mint a ghost
+          </button>
+        </div>
+        <div id="mint-preview" class="skel-status" hidden></div>
+        <div class="skel-form-row">
+          <button
+            id="mint-confirm-button"
+            class="skel-btn"
+            type="button"
+            hidden
+          >
+            Confirm in wallet
+          </button>
+        </div>
+        <div id="mint-status" class="skel-status" role="status"></div>
+      </section>
+
+      <section class="skel-section" aria-labelledby="leaderboard-heading">
+        <span class="skel-vertical" aria-hidden="true">/minters</span>
+        <div class="skel-section-head">
+          <span class="skel-section-number">04</span>
+          <h2 id="leaderboard-heading" class="skel-section-label">
+            /Top minters
+          </h2>
+        </div>
+        <table class="skel-table">
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">Wallet</th>
+              <th scope="col">Inscriptions</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboard-body"></tbody>
+        </table>
+        <p id="leaderboard-empty" class="skel-empty">
+          No minters yet. Be the first to mint.
+        </p>
+      </section>
+
+      <section class="skel-section" aria-labelledby="activity-heading">
+        <div class="skel-section-head">
+          <span class="skel-section-number">05</span>
+          <h2 id="activity-heading" class="skel-section-label">
+            /Live activity
+          </h2>
+        </div>
+        <ul id="activity-list" class="skel-activity"></ul>
+        <p id="activity-empty" class="skel-empty">
+          No activity yet. Mints appear here as they land on-chain.
+        </p>
+      </section>
+    </main>
+
+    <footer class="skel-footer">
+      Skelsol — a lean template for SPL-20-style inscriptions on Solana.
+      Kiroween 2026, Skeleton Crew. The page never asks for a seed phrase
+      or private key: your wallet signs, the page only builds the
+      transaction.
+    </footer>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

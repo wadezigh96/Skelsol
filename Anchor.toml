@@ -1,0 +1,29 @@
+# Anchor workspace for Skelsol. The one custom program is skelsol-market
+# (market escrow: list / buy / cancel). See docs/adr/0003-anchor-escrow-program.md.
+#
+# Tests are Rust + LiteSVM (the anchor-cli 1.2.2 default): `anchor test`
+# builds the program, then runs `cargo test` against an in-process VM.
+# No local validator is needed. There is no @coral-xyz/anchor 1.x TS
+# client on npm (latest is 0.32.1), so there are no TS Anchor tests.
+skip_local_validator = true
+
+[toolchain]
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+skelsol-market = "3XMFqwbEND9gYWoTahNQPhVoNspHet1PfdizsRymqwNo"
+
+[programs.devnet]
+skelsol-market = "3XMFqwbEND9gYWoTahNQPhVoNspHet1PfdizsRymqwNo"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "cargo test"
+
+[hooks]

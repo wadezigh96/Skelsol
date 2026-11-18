@@ -1,0 +1,50 @@
+[package]
+name = "skelsol-market"
+version = "0.1.0"
+description = "Fixed-price NFT escrow for the Skelsol inscription marketplace"
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "skelsol_market"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+# `init-if-needed` is required for the buyer/seller token accounts in
+# `buy`/`cancel`. It is safe here: those accounts are associated token
+# accounts (PDAs) whose mint and owner are enforced by the Token program
+# and re-checked by Anchor's `associated_token` constraints, so a
+# pre-created account at that address cannot carry attacker-chosen state.
+anchor-lang = { version = "1.2.2", features = ["init-if-needed"] }
+anchor-spl = "1.2.2"
+
+[dev-dependencies]
+# litesvm 0.15.x, matching the anchor-cli 1.2.2 scaffold template: the
+# Cargo.lock is based on the scaffold's shipped lockfile (solana
+# 4.1.x-era graph). Newer resolutions break: litesvm 0.15.2 does not
+# compile against solana-program-runtime 4.2+ (ExecutionRecord changed),
+# and litesvm 0.18.x pulls a wincode 0.5/0.6 split that breaks
+# solana-loader-v3-interface 8.0.1. Do not `cargo update` blindly.
+litesvm = "0.15.0"
+litesvm-token = "0.15.2"
+solana-account = "4"
+solana-keypair = "3"
+solana-message = "4"
+solana-program-pack = "3"
+solana-signer = "3"
+solana-transaction = "4"
+spl-associated-token-account-interface = "2"
+spl-token-interface = "3"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
