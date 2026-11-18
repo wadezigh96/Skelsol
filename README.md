@@ -23,12 +23,11 @@ whole flow for free. A network switch moves each app to mainnet.
 > - **Minting works on devnet today.** It needs no custom program — it
 >   uses the Memo program and Metaplex Token Metadata — and it has been
 >   verified live on devnet via `skel status`.
-> - **The market program is NOT deployed yet.** The escrow program
->   (`skelsol-market`) is built and tested, but the devnet deploy is
->   waiting on ~3 SOL of funding for the deploy wallet (see
->   [Deploy](#deploy-status) and `docs/DEPLOY.md`). Until it deploys,
->   listing, buying, and cancelling refuse with a clear message in both
->   apps and in the CLI. They never fake a result.
+> - **The market program is deployed on devnet** (19 Nov 2026).
+>   The escrow program (`skelsol-market`) is live at program ID
+>   `3XMFqwbEND9gYWoTahNQPhVoNspHet1PfdizsRymqwNo` (see
+>   [Deploy](#deploy-status) and `docs/DEPLOY.md`). Listing, buying,
+>   and cancelling work on devnet in both apps and in the CLI.
 > - **The wallet handshake and live mint in a real browser have not been
 >   tested here** (no browser extension exists in this environment). A
 >   real-browser check with Phantom/Solflare is still needed before
@@ -239,17 +238,14 @@ too):
   field with the relative path `ghost.svg`, which resolves against
   the hosted metadata URL.
 
-The apps are not hosted yet, so the config still points at
-`example.com` placeholders on purpose (see the TODO on
-`GHOST_COLLECTION` in `packages/template/src/config.ts`). A carrier
-NFT minted today shows no image. Once the Ghost Mint site is hosted
-at some `https://<host>/`, the fix is one change in
-`packages/template/src/config.ts`, in the `GHOST_COLLECTION`
-constant:
+The Ghost Mint site is hosted at
+https://skelsol-ghost-mint.vercel.app (Vercel, deployed 19 Nov 2026),
+and the config points at its hosted assets
+(`packages/template/src/config.ts`, `GHOST_COLLECTION`):
 
 ```ts
-image: "https://<host>/assets/ghost.svg",
-metadataBaseUri: "https://<host>/assets/",
+image: "https://skelsol-ghost-mint.vercel.app/assets/ghost.svg",
+metadataBaseUri: "https://skelsol-ghost-mint.vercel.app/assets/",
 ```
 
 One wrinkle, stated plainly: the mint client builds a **per-mint**
@@ -258,10 +254,11 @@ URI for every mint (`packages/template/src/mint.ts`). Static hosting
 has no per-mint files; it has the one shared `ghost.json`. Serving
 that file for every per-mint URI needs a host rewrite rule mapping
 `/assets/*.json` to `/assets/ghost.json` (for example a Vercel
-rewrite or a Netlify redirect). The alternative is a template change:
+rewrite or a Netlify redirect). The rewrite rule lives in the
+repo-root `vercel.json`, so the hosted config above works as-is. The
+alternative is a template change:
 point every carrier at the single shared URI instead of a per-mint
-one. Until one of those lands, the hosted config above is not enough
-on its own. The shared file also means the JSON carries the
+one. The shared file also means the JSON carries the
 collection name ("Spooky Ghosts"); the edition number ("Spooky
 Ghosts #N") lives only in the on-chain NFT name the mint client
 sets.

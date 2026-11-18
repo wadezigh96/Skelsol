@@ -176,9 +176,10 @@ function requireOptionalAddress(
  * The Ghost collection: the demo inscription series shipped with the
  * template. Free mint (price 0 lamports, rent only).
  *
- * TODO: the image and metadata URIs are placeholders until the demo asset
- * hosting is decided (a later ticket). They point at example.com on
- * purpose so nobody mistakes them for real hosted assets.
+ * The image and metadata URIs point at the hosted Ghost Mint site
+ * (Vercel, deployed 19 Nov 2026). The metadata URI is per-mint; the
+ * shared ghost.json is served for every per-mint URI by the rewrite
+ * rule in the repo-root vercel.json.
  */
 export const GHOST_COLLECTION: CollectionConfig = loadCollectionConfig({
   tick: "GHOST",
@@ -186,8 +187,8 @@ export const GHOST_COLLECTION: CollectionConfig = loadCollectionConfig({
   supply: 4444,
   perWalletLimit: 4,
   priceLamports: 0,
-  image: "https://example.com/skelsol/ghost.png",
-  metadataBaseUri: "https://example.com/skelsol/ghost/",
+  image: "https://skelsol-ghost-mint.vercel.app/assets/ghost.svg",
+  metadataBaseUri: "https://skelsol-ghost-mint.vercel.app/assets/",
 });
 
 /** The Solana networks the template supports. */
@@ -232,9 +233,8 @@ const NETWORK_CONFIGS: Record<Network, NetworkConfig> = {
     memoProgramId: MEMO_PROGRAM_ID,
     tokenMetadataProgramId: TOKEN_METADATA_PROGRAM_ID,
     // The devnet program ID is final (ticket 07; keypair in
-    // ~/.config/solana/skelsol-market.json). The devnet DEPLOY itself is
-    // still pending devnet SOL funding — see docs/DEPLOY.md. Market calls
-    // to this ID fail until the deploy lands; the apps must say so.
+    // ~/.config/solana/skelsol-market.json). Deployed to devnet 19 Nov
+    // 2026; see docs/DEPLOY.md.
     escrowProgramId: "3XMFqwbEND9gYWoTahNQPhVoNspHet1PfdizsRymqwNo",
   },
   mainnet: {

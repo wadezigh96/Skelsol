@@ -29,8 +29,8 @@ consumer, the `skel` CLI for AI agents.
 | | |
 |---|---|
 | Repository | https://github.com/wadezigh96/Skelsol |
-| Ghost Mint (demo) | TODO (owner) — app not hosted yet; builds to a static site from `apps/ghost-mint/` |
-| Inscription Market (demo) | TODO (owner) — app not hosted yet; builds to a static site from `apps/market/` |
+| Ghost Mint (demo) | https://skelsol-ghost-mint.vercel.app |
+| Inscription Market (demo) | https://skelsol-market.vercel.app |
 | Demo video (under 3 minutes) | TODO (owner) — to be recorded by the owner; see "Demo video" below |
 | Hackathon | https://kiroween.devpost.com |
 
@@ -159,17 +159,15 @@ flow for free; a network switch moves each app to mainnet.
 
 - **Minting works on devnet today**, verified live via `skel status`.
   It needs no custom program.
-- **The market program is built and tested but NOT deployed yet.**
-  The devnet deploy is waiting on ~3 SOL of funding for the deploy
-  wallet `7T1fjFsHvo3Q7EpwN5RzgNk8HARdxKnC3tgkavAbBQX7` (web faucet:
-  https://faucet.solana.com). Program ID:
-  `3XMFqwbEND9gYWoTahNQPhVoNspHet1PfdizsRymqwNo`. Until it deploys,
-  listing, buying, and cancelling refuse with a clear message in both
-  apps and in the CLI. See `docs/DEPLOY.md`.
-- **The demo apps are not hosted yet.** They build to static sites
-  (`apps/ghost-mint/dist/`, `apps/market/dist/`) and can be served
-  from any static host, or run locally — see the judge instructions
-  below.
+- **The market program is deployed on devnet** (19 Nov 2026;
+  transaction `4RC4UVyowp6Ss9jkKVZQzq35hwaNAKnwg3Sk1xPAFhoWkbp26TLdxL6tjhMqmPXyicE23gtd69GWutNnFj4pakoM`).
+  Program ID: `3XMFqwbEND9gYWoTahNQPhVoNspHet1PfdizsRymqwNo`.
+  Listing, buying, and cancelling work on devnet in both apps and in
+  the CLI. See `docs/DEPLOY.md`.
+- **The demo apps are hosted on Vercel:** Ghost Mint at
+  https://skelsol-ghost-mint.vercel.app and Inscription Market at
+  https://skelsol-market.vercel.app. They build to static sites
+  (`apps/ghost-mint/dist/`, `apps/market/dist/`).
 - **The wallet handshake and live mint in a real browser have not
   been tested here** (no browser extension in this environment). A
   real-browser check is still needed before demo day.
@@ -192,10 +190,7 @@ faucet, not `solana airdrop`.)
 
 ### 2. Open Ghost Mint and mint
 
-1. Open the Ghost Mint demo link (TODO — until it is hosted, run it
-   locally: `npm install`, then `cd apps/ghost-mint && npm run build`,
-   then serve `dist/` with any static host, e.g.
-   `npx serve dist`).
+1. Open the Ghost Mint demo link: https://skelsol-ghost-mint.vercel.app
 2. Confirm the network indicator says **devnet**.
 3. Connect your wallet (Phantom or Solflare) from the top bar.
 4. Check the stats row (minted, minters, inscriptions, listings,
@@ -222,10 +217,9 @@ faucet, not `solana airdrop`.)
 > pages say so plainly and refuse trades. Check the deploy status in
 > `docs/DEPLOY.md` or the program's explorer page:
 > https://explorer.solana.com/address/3XMFqwbEND9gYWoTahNQPhVoNspHet1PfdizsRymqwNo?cluster=devnet
-> (it 404s until the deploy lands).
+> (deployed 19 Nov 2026; transaction `4RC4UVyowp6Ss9jkKVZQzq35hwaNAKnwg3Sk1xPAFhoWkbp26TLdxL6tjhMqmPXyicE23gtd69GWutNnFj4pakoM`).
 
-1. Open the Market demo link (TODO — until hosted, run locally:
-   `cd apps/market && npm run build`, then serve `dist/`).
+1. Open the Market demo link: https://skelsol-market.vercel.app
 2. Connect the wallet that holds a carrier NFT.
 3. List it at a fixed price (e.g. 1 SOL = 1,000,000,000 lamports).
    The NFT moves into escrow — it leaves your wallet until the
