@@ -246,16 +246,20 @@
         </p>
       </section>
 
-      <!-- Closing scene: an original illustration made for Skelsol —
+      <!-- Closing scene: an original animation made for Skelsol —
            skeletons dancing around a jack-o'-lantern. Pure decoration,
-           so it is hidden from assistive tech. -->
+           so it is hidden from assistive tech. Playback starts from
+           main.ts, which keeps it still for reduced-motion visitors. -->
       <figure class="skel-graveyard" aria-hidden="true">
-        <img
+        <video
           class="skel-graveyard-art"
-          src="./assets/graveyard-dance.jpg"
-          alt=""
-          loading="lazy"
-        />
+          src="./assets/graveyard-dance.mp4"
+          poster="./assets/graveyard-dance.jpg"
+          muted
+          loop
+          playsinline
+          preload="auto"
+        ></video>
       </figure>
     </main>
 

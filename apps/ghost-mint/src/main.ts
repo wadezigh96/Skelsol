@@ -482,6 +482,22 @@ function switchNetwork(next: Network): void {
   void refresh();
 }
 
+// The graveyard scene is a looping video. Start it from here (not with
+// the autoplay attribute) so visitors who prefer reduced motion get the
+// still poster instead of a dancing video.
+function startGraveyardVideo(): void {
+  const video = document.querySelector(".skel-graveyard-art");
+  if (!(video instanceof HTMLVideoElement)) {
+    return;
+  }
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    return;
+  }
+  void video.play().catch(() => {
+    // Autoplay was blocked; the poster still shows the scene.
+  });
+}
+
 walletButton.addEventListener("click", () => {
   void onWalletButton();
 });
@@ -504,5 +520,7 @@ mintButton.addEventListener("click", () => {
 mintConfirmButton.addEventListener("click", () => {
   void onConfirmMint();
 });
+
+startGraveyardVideo();
 
 void refresh();
