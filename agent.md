@@ -349,37 +349,3 @@ Stdout parses as JSON with no extra text; the preview (for writes)
 stays on stderr. Note that writes still ask for confirmation on stdin
 in `--json` mode: pipe the user's `yes` only after showing them the
 preview from stderr.
-
-## 10. Ringkasan dalam Bahasa Indonesia
-
-Skelsol adalah kerangka (template) untuk membuat inskripsi SPL-20 di
-Solana. Koleksi demonya bernama GHOST ("Spooky Ghosts"): total 4.444,
-maksimal 4 per dompet, gratis (hanya bayar sewa akun).
-
-`skel` adalah perintah terminal untuk agen AI yang memakai Skelsol:
-
-- `skel status` — lihat keadaan koleksi dan harga terendah pasar.
-- `skel lookup <dompet>` — lihat inskripsi milik sebuah dompet.
-- `skel mint` — membuat satu inskripsi GHOST baru.
-- `skel list <mint> <harga>` — menjual inskripsi dengan harga tetap.
-- `skel buy <penjual> <mint>` — membeli inskripsi yang dijual.
-- `skel cancel <mint>` — membatalkan penjualanmu.
-
-Aturan keamanan yang wajib diingat:
-
-1. Setiap perintah yang mengubah data (mint, list, buy, cancel) selalu
-   menampilkan pratinjau dulu: apa yang akan terjadi dan berapa
-   biayanya.
-2. Transaksi hanya dikirim setelah pengguna mengetik `yes` secara
-   jelas untuk tindakan itu. Tidak ada jalan pintas, tidak ada
-   persetujuan borongan.
-3. Jangan pernah menyimpan file keypair di repo, dan jangan memakai
-   dompet berisi dana besar. Pakai dompet khusus agen dengan dana
-   kecil saja.
-4. Standarnya adalah devnet (SOL gratis dari faucet). Mainnet adalah
-   uang sungguhan.
-
-Status saat ini: mint sudah bisa dipakai di devnet, tetapi program
-pasar (market) belum di-deploy, jadi `list`, `buy`, dan `cancel`
-menolak dengan pesan yang jelas sampai deploy selesai. Lihat
-`docs/DEPLOY.md` untuk status deploy.
