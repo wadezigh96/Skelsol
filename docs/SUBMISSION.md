@@ -2,12 +2,11 @@
 
 > **This file is a draft for the owner to paste into Devpost.** Items
 > marked **TODO (owner)** are things only the owner can provide and
-> must not be invented: the demo video, the "How Kiro was used"
-> write-up, and the deployed demo links (until the apps are hosted).
-> Everything else in this draft is written from the repo as it stands
-> on 19 November 2026. Before submitting, re-check the deploy status
-> in `docs/DEPLOY.md` — if the market program has deployed by then,
-> update the status lines below to match.
+> must not be invented: the demo video and the "How Kiro was used"
+> write-up. Everything else in this draft is written from the repo as
+> it stands on 19 November 2026. The market program is deployed on
+> devnet and both demo apps are hosted; the status lines below already
+> reflect that.
 
 ## Project title
 
@@ -134,21 +133,23 @@ flow for free; a network switch moves each app to mainnet.
 - **Rent is a moving target.** SIMD-0437 is cutting rent in steps
   through late 2026, so no rent figure is hard-coded anywhere; the
   mint client queries the live rent minimum at runtime.
-- **No browser in the build environment.** The wallet handshake and a
-  live mint in a real browser could not be tested here; a real-browser
-  check with Phantom/Solflare is still needed before demo day, and
-  the README says so.
+- **No browser wallet in the build environment.** The hosted apps
+  have been checked in a real browser (stats, market status,
+  listings — the market was verified live on devnet on 19 Nov
+  2026), but the wallet handshake and a live mint with
+  Phantom/Solflare still need a human with a wallet in a real
+  browser; the README says so.
 
 ### What's next
 
-- **Deploy the market program to devnet** (funding the deploy wallet
-  with ~3 SOL is the only blocker) and host both demo apps, so judges
-  can try list/buy/cancel without running anything locally.
 - **Host real collection art** (the config currently points at a
   placeholder image URL) and the off-chain metadata JSON on durable
   storage (Arweave/IPFS).
-- **A real-browser test pass** with Phantom and Solflare, and a
-  re-check of the demo flow after the deploy lands.
+- **A real-browser test pass** with Phantom and Solflare: the wallet
+  handshake and a live mint are the only parts of the demo flow not
+  yet exercised in a real browser (the market program is deployed,
+  both apps are hosted, and the stats and market status were
+  re-checked on 19 Nov 2026).
 - **Metaplex Core migration path** for lower mint cost if the
   compatibility trade-off ever flips (documented in ADR 0002).
 - **On-chain inscription accounts** (LibrePlex or Metaplex
@@ -169,8 +170,9 @@ flow for free; a network switch moves each app to mainnet.
   https://skelsol-market.vercel.app. They build to static sites
   (`apps/ghost-mint/dist/`, `apps/market/dist/`).
 - **The wallet handshake and live mint in a real browser have not
-  been tested here** (no browser extension in this environment). A
-  real-browser check is still needed before demo day.
+  been tested** (they need a human with a wallet in a real browser).
+  The stats, market status, and listings pages have been checked in
+  a real browser on 19 Nov 2026.
 
 ## Judge testing instructions
 
@@ -213,9 +215,9 @@ faucet, not `solana airdrop`.)
 
 ### 4. Trade on the Market
 
-> **Only after the market program deploys.** Until then the market
-> pages say so plainly and refuse trades. Check the deploy status in
-> `docs/DEPLOY.md` or the program's explorer page:
+> The market program is deployed on devnet and was verified live in
+> a real browser on 19 Nov 2026 ("The market is live on devnet").
+> Program explorer page:
 > https://explorer.solana.com/address/3XMFqwbEND9gYWoTahNQPhVoNspHet1PfdizsRymqwNo?cluster=devnet
 > (deployed 19 Nov 2026; transaction `4RC4UVyowp6Ss9jkKVZQzq35hwaNAKnwg3Sk1xPAFhoWkbp26TLdxL6tjhMqmPXyicE23gtd69GWutNnFj4pakoM`).
 
