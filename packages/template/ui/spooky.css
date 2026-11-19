@@ -7,6 +7,10 @@
  * Components: top bar, hero with giant display type, numbered
  * sections, vertical edge text, stats row, tables, forms, buttons.
  *
+ * A fixed graveyard backdrop sits behind the whole page, so the
+ * background never reads as flat black. Its detail lives at the
+ * left and right edges; the middle stays near-black for text.
+ *
  * Motion: a Halloween layer in the hero (floating art, drifting fog,
  * flickering glow, twinkling stars, bats) plus a soft glow pulse on
  * primary buttons. All motion uses transform/translate/opacity only,
@@ -37,6 +41,35 @@ body {
   font-family: var(--skel-body-font);
   font-size: 15px;
   line-height: 1.5;
+}
+
+/* ---- Page background ----------------------------------------------
+ * A fixed graveyard backdrop behind everything. The image itself is
+ * composed with its detail (gnarled trees, tombstones) at the left
+ * and right edges and near-black fog in the middle; the gradient
+ * below deepens that middle, so white text stays readable anywhere
+ * on the page. The layer is static (no motion to disable for
+ * reduced-motion visitors) and sits behind all content via a
+ * negative z-index, so it can never intercept clicks. The image
+ * lives in each app's public/assets/ as page-bg.jpg; this shared
+ * stylesheet references it with a path relative to dist/spooky.css,
+ * where the build copies this file.
+ */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      to right,
+      rgba(10, 10, 10, 0.25),
+      rgba(10, 10, 10, 0.78) 30%,
+      rgba(10, 10, 10, 0.78) 70%,
+      rgba(10, 10, 10, 0.25)
+    ),
+    url("./assets/page-bg.jpg") center / cover no-repeat;
 }
 
 a {
