@@ -339,7 +339,9 @@ pages during the live-browser checks (see ADR 0012). Set
 (the URL carries the provider's API key, so it never appears in this
 repo). Without it, the sites fall back to the public endpoint. The
 CLI reads the same variable (and `SKELSOL_MAINNET_RPC_URL`) from its
-own environment.
+own environment. The market read also retries once on the configured
+endpoint, then tries the public endpoint once before giving up, and
+shows the underlying error when it still fails (see ADR 0013).
 
 ### On-chain addresses
 

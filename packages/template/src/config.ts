@@ -308,6 +308,24 @@ export function getNetworkConfig(network: Network): NetworkConfig {
 }
 
 /**
+ * The network's built-in public RPC endpoint, ignoring any override
+ * set with {@link setRpcEndpointOverride}. The market read uses it
+ * as its fallback: when the configured endpoint fails, the public
+ * endpoint gets one try before the read gives up. Throws a
+ * `ConfigError` for an unknown network name.
+ */
+export function getDefaultRpcEndpoint(network: Network): string {
+  const config = NETWORK_CONFIGS[network];
+  if (config === undefined) {
+    throw new ConfigError(
+      `Invalid network config: unknown network "${String(network)}". ` +
+        `Supported networks: devnet, mainnet.`,
+    );
+  }
+  return config.rpcEndpoint;
+}
+
+/**
  * Return the escrow program ID for a network. Throws a `ConfigError` while
  * the escrow program is not deployed on that network yet, so market code
  * fails with a clear message instead of sending a transaction to a

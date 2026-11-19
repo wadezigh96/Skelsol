@@ -1,6 +1,7 @@
 import {
   activityLabel,
   buildMintTransaction,
+  createPublicMarketConnection,
   createReaderLimitsChecker,
   explorerAddressUrl,
   explorerTransactionUrl,
@@ -19,6 +20,7 @@ import {
   toMarketConnection,
   toReaderConnection,
   WalletAdapter,
+  withCause,
   withTimeout,
   type ActivityEvent,
   type BuildMintTransactionResult,
@@ -161,7 +163,11 @@ async function refresh(): Promise<void> {
     let marketStats: MarketStats | undefined;
     try {
       const { deployed, listings } = await withTimeout(
-        readMarketState(toMarketConnection(adapter.getConnection()), network),
+        readMarketState(toMarketConnection(adapter.getConnection()), network, {
+          // When the configured endpoint fails, the public endpoint
+          // gets one try before the read gives up (ADR 0013).
+          fallbackConnection: createPublicMarketConnection(network),
+        }),
         MARKET_TIMEOUT_MS,
         "The market could not be reached in time.",
       );
@@ -172,9 +178,14 @@ async function refresh(): Promise<void> {
         marketNoteStatus.textContent =
           `The market program is not deployed on ${network} yet.`;
       }
-    } catch {
-      marketNoteStatus.textContent =
-        "Could not reach the market right now.";
+    } catch (error) {
+      // Show the underlying cause when there is one ("…right now.
+      // (429 Too Many Requests)"), so a failing market read says
+      // WHAT failed instead of hiding it behind a generic note.
+      marketNoteStatus.textContent = withCause(
+        "Could not reach the market right now.",
+        error,
+      );
     }
 
     const stats = statsViewModel(state, marketStats);

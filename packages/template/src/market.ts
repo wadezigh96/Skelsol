@@ -1,13 +1,15 @@
 import {
+  Connection,
   PublicKey,
   SystemProgram,
   Transaction,
   TransactionInstruction,
-  type Connection,
 } from "@solana/web3.js";
 
+import { withRetry } from "./async.js";
 import {
   ConfigError,
+  getDefaultRpcEndpoint,
   getEscrowProgramId,
   type Network,
 } from "./config.js";
@@ -33,10 +35,8 @@ import type { MarketStats } from "./ui.js";
  * CPI; the client only supplies the accounts. The fee is 1% of the sale
  * price to the treasury; the seller receives 99%.
  *
- * The program is built and tested but not yet deployed to devnet
- * (funding pending, see docs/DEPLOY.md). These builders target the
- * final program ID; transactions to it fail until the deploy lands,
- * and the apps must say so.
+ * The program is deployed to devnet (19 Nov 2026; see docs/DEPLOY.md).
+ * These builders target the final program ID.
  */
 
 /** Seed for the listing PDA: `["listing", seller, mint]`. */
@@ -585,6 +585,25 @@ export function toMarketConnection(connection: Connection): MarketConnection {
 }
 
 /**
+ * A market connection to the network's built-in public RPC endpoint,
+ * ignoring any endpoint override. The apps pass it as
+ * {@link ReadMarketStateOptions.fallbackConnection}: when the
+ * configured endpoint fails, the public endpoint gets one try before
+ * the read gives up. Constructing it costs nothing until a call is
+ * made, so the apps build it fresh per refresh.
+ */
+export function createPublicMarketConnection(
+  network: Network,
+): MarketConnection {
+  return toMarketConnection(
+    new Connection(getDefaultRpcEndpoint(network), {
+      commitment: "confirmed",
+      disableRetryOnRateLimit: true,
+    }),
+  );
+}
+
+/**
  * Read the open listings from the escrow program's accounts: every
  * Listing account on the network, decoded to seller, mint, price, and
  * bump. The RPC query filters on the Listing discriminator, so only
@@ -660,7 +679,18 @@ export async function checkMarketDeployed(
     }
     throw error;
   }
-  const info = await connection.getAccountInfo(new PublicKey(programId));
+  let info: { data: Buffer } | null;
+  try {
+    info = await connection.getAccountInfo(new PublicKey(programId));
+  } catch (error) {
+    // A network failure is not a missing program: report it as a
+    // plain-words network error (like getListings does) with the raw
+    // error kept as the cause, so callers can retry it and report it
+    // honestly instead of misreading it as "not deployed".
+    throw new MarketError("rpc-error", NETWORK_UNREACHABLE_MESSAGE, {
+      cause: error,
+    });
+  }
   return info !== null;
 }
 
@@ -674,14 +704,78 @@ export interface MarketState {
   listings: Listing[];
 }
 
+/** Options for {@link readMarketState}. */
+export interface ReadMarketStateOptions {
+  /**
+   * A second connection to try once when the primary read fails
+   * after its retries. The apps pass
+   * {@link createPublicMarketConnection}: the configured endpoint
+   * (a dedicated RPC) is tried first, the public endpoint second.
+   * When omitted, a failed read simply throws.
+   */
+  fallbackConnection?: MarketConnection;
+  /**
+   * Total attempts on the primary connection before falling back.
+   * Defaults to 2 (one retry). Only rate-limit-looking failures
+   * are retried; anything else fails after the first try. Two is
+   * enough to survive a single transient failure while keeping
+   * the whole read (primary plus fallback) inside the apps'
+   * 15-second market deadline. See ADR 0013.
+   */
+  maxAttempts?: number;
+  /**
+   * Delay before the first retry, in milliseconds; each later
+   * retry waits twice as long. Defaults to 250.
+   */
+  retryBaseDelayMs?: number;
+  /**
+   * How the read waits between retries. Defaults to a real timer;
+   * tests pass a fake that records the delays instead of waiting,
+   * so no test ever waits for real.
+   */
+  sleep?: (ms: number) => Promise<void>;
+}
+
 /**
  * Read the market's deploy state and open listings: whether the escrow
  * program is deployed on the network, and the open listings when it is.
  * Throws on an RPC failure, so callers can tell "not deployed" from
  * "unreachable" instead of misreporting a network failure as a
  * missing program.
+ *
+ * The read retries a rate-limit-looking failure once on the primary
+ * connection, then tries the fallback connection once (when one is
+ * given) before throwing. The market read used to die on a single
+ * transient failure, which is why the sites showed "Could not reach
+ * the market" on every load while the transaction fetches — which
+ * already retried — mostly worked. See ADR 0013.
  */
 export async function readMarketState(
+  connection: MarketConnection,
+  network: Network,
+  options?: ReadMarketStateOptions,
+): Promise<MarketState> {
+  try {
+    return await withRetry(() => readMarketStateOnce(connection, network), {
+      maxAttempts: options?.maxAttempts ?? 2,
+      baseDelayMs: options?.retryBaseDelayMs ?? 250,
+      // exactOptionalPropertyTypes: never pass an explicit undefined.
+      ...(options?.sleep !== undefined ? { sleep: options.sleep } : {}),
+    });
+  } catch (error) {
+    if (options?.fallbackConnection === undefined) {
+      throw error;
+    }
+    return await readMarketStateOnce(options.fallbackConnection, network);
+  }
+}
+
+/**
+ * One attempt at the market read: is the escrow program deployed,
+ * and if so, what listings are open. Separated out so
+ * {@link readMarketState} can retry and fall back around it.
+ */
+async function readMarketStateOnce(
   connection: MarketConnection,
   network: Network,
 ): Promise<MarketState> {

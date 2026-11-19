@@ -436,12 +436,23 @@ class FakeMarketConnection implements MarketConnection {
   getAccountInfoCalls: PublicKey[] = [];
   programAccountsError: Error | null = null;
   accountInfoError: Error | null = null;
+  // Countdowns for retry tests: fail this many times, then succeed.
+  // Each failure uses the matching *Error above, or "fetch failed"
+  // when none is set.
+  programAccountsFailuresRemaining = 0;
+  accountInfoFailuresRemaining = 0;
 
   getProgramAccounts(
     programId: PublicKey,
     config?: MarketProgramAccountsConfig,
   ): Promise<Array<{ pubkey: PublicKey; account: { data: Buffer } }>> {
     this.getProgramAccountsCalls.push({ programId, config });
+    if (this.programAccountsFailuresRemaining > 0) {
+      this.programAccountsFailuresRemaining -= 1;
+      return Promise.reject(
+        this.programAccountsError ?? new Error("fetch failed"),
+      );
+    }
     if (this.programAccountsError !== null) {
       return Promise.reject(this.programAccountsError);
     }
@@ -452,6 +463,12 @@ class FakeMarketConnection implements MarketConnection {
     pubkey: PublicKey,
   ): Promise<{ data: Buffer } | null> {
     this.getAccountInfoCalls.push(pubkey);
+    if (this.accountInfoFailuresRemaining > 0) {
+      this.accountInfoFailuresRemaining -= 1;
+      return Promise.reject(
+        this.accountInfoError ?? new Error("fetch failed"),
+      );
+    }
     if (this.accountInfoError !== null) {
       return Promise.reject(this.accountInfoError);
     }
@@ -635,10 +652,110 @@ describe("readMarketState", () => {
 
   it("lets an RPC failure through instead of reporting not deployed", async () => {
     const connection = new FakeMarketConnection();
+    const rpcError = new Error("RPC is down");
+    connection.accountInfoError = rpcError;
+    try {
+      await readMarketState(connection, "devnet");
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(MarketError);
+      expect((error as MarketError).reason).toBe("rpc-error");
+      expect((error as MarketError).message).toBe(
+        "Could not reach the network, try again.",
+      );
+      expect((error as MarketError).cause).toBe(rpcError);
+    }
+  });
+
+  it("does not retry a non-retryable failure", async () => {
+    const connection = new FakeMarketConnection();
     connection.accountInfoError = new Error("RPC is down");
     await expect(readMarketState(connection, "devnet")).rejects.toThrow(
-      "RPC is down",
+      "Could not reach the network, try again.",
     );
+    expect(connection.getAccountInfoCalls).toHaveLength(1);
+  });
+
+  it("retries a retryable failure on the primary, then succeeds", async () => {
+    const connection = new FakeMarketConnection();
+    connection.accountInfo.set(ESCROW_PROGRAM_ID.toBase58(), {
+      data: Buffer.alloc(0),
+    });
+    connection.programAccountsFailuresRemaining = 1;
+    const delays: number[] = [];
+    const sleep = async (ms: number): Promise<void> => {
+      delays.push(ms);
+    };
+    const state = await readMarketState(connection, "devnet", { sleep });
+    expect(state).toEqual({ deployed: true, listings: [] });
+    expect(connection.getProgramAccountsCalls).toHaveLength(2);
+    expect(delays).toEqual([250]);
+  });
+
+  it("falls back to the fallback connection when the primary keeps failing", async () => {
+    const primary = new FakeMarketConnection();
+    primary.accountInfo.set(ESCROW_PROGRAM_ID.toBase58(), {
+      data: Buffer.alloc(0),
+    });
+    primary.programAccountsError = new Error("fetch failed");
+    const fallback = new FakeMarketConnection();
+    fallback.accountInfo.set(ESCROW_PROGRAM_ID.toBase58(), {
+      data: Buffer.alloc(0),
+    });
+    fallback.programAccounts = [
+      {
+        pubkey: LISTING_ADDRESS,
+        account: {
+          data: makeListingBuffer({
+            seller,
+            mint,
+            price: 1_500_000_000n,
+            bump: LISTING_BUMP,
+          }),
+        },
+      },
+    ];
+    const sleep = (): Promise<void> => Promise.resolve();
+    const state = await readMarketState(primary, "devnet", {
+      fallbackConnection: fallback,
+      sleep,
+    });
+    expect(state.deployed).toBe(true);
+    expect(state.listings).toHaveLength(1);
+    expect(state.listings[0]?.price).toBe(1_500_000_000n);
+    // Primary tried twice (one retry), then the fallback served the read.
+    expect(primary.getProgramAccountsCalls).toHaveLength(2);
+    expect(fallback.getProgramAccountsCalls).toHaveLength(1);
+  });
+
+  it("does not touch the fallback connection when the primary succeeds", async () => {
+    const primary = new FakeMarketConnection();
+    primary.accountInfo.set(ESCROW_PROGRAM_ID.toBase58(), {
+      data: Buffer.alloc(0),
+    });
+    const fallback = new FakeMarketConnection();
+    const state = await readMarketState(primary, "devnet", {
+      fallbackConnection: fallback,
+    });
+    expect(state).toEqual({ deployed: true, listings: [] });
+    expect(fallback.getAccountInfoCalls).toHaveLength(0);
+    expect(fallback.getProgramAccountsCalls).toHaveLength(0);
+  });
+
+  it("throws the fallback's error when both connections fail", async () => {
+    const primary = new FakeMarketConnection();
+    primary.accountInfoError = new Error("fetch failed");
+    const fallback = new FakeMarketConnection();
+    fallback.accountInfoError = new Error("fetch failed");
+    const sleep = (): Promise<void> => Promise.resolve();
+    await expect(
+      readMarketState(primary, "devnet", {
+        fallbackConnection: fallback,
+        sleep,
+      }),
+    ).rejects.toThrow("Could not reach the network, try again.");
+    expect(primary.getAccountInfoCalls).toHaveLength(2);
+    expect(fallback.getAccountInfoCalls).toHaveLength(1);
   });
 });
 
@@ -969,8 +1086,9 @@ describe("checkMarketDeployed", () => {
   });
 
   it("reports not deployed when the program account is missing on devnet", async () => {
-    // The current real state: the devnet program ID is final, but the
-    // deploy itself is pending funding (docs/DEPLOY.md).
+    // The fake holds no program account, so the answer is false. (The
+    // real devnet program IS deployed since 19 Nov 2026; this only
+    // exercises the missing-account path.)
     await expect(
       checkMarketDeployed(new FakeMarketConnection(), "devnet"),
     ).resolves.toBe(false);
@@ -986,12 +1104,21 @@ describe("checkMarketDeployed", () => {
     );
   });
 
-  it("lets an RPC failure through instead of reporting not deployed", async () => {
+  it("reports an RPC failure as a plain-words network error, keeping the cause", async () => {
     const connection = new FakeMarketConnection();
-    connection.accountInfoError = new Error("RPC is down");
-    await expect(checkMarketDeployed(connection, "devnet")).rejects.toThrow(
-      "RPC is down",
-    );
+    const rpcError = new Error("RPC is down");
+    connection.accountInfoError = rpcError;
+    try {
+      await checkMarketDeployed(connection, "devnet");
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(MarketError);
+      expect((error as MarketError).reason).toBe("rpc-error");
+      expect((error as MarketError).message).toBe(
+        "Could not reach the network, try again.",
+      );
+      expect((error as MarketError).cause).toBe(rpcError);
+    }
   });
 });
 

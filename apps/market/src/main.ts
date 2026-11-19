@@ -4,6 +4,7 @@ import {
   buildBuyTransaction,
   buildCancelTransaction,
   buildListTransaction,
+  createPublicMarketConnection,
   explorerAddressUrl,
   explorerTransactionUrl,
   getCollectionOverview,
@@ -17,6 +18,7 @@ import {
   toMarketConnection,
   toReaderConnection,
   WalletAdapter,
+  withCause,
   withTimeout,
   type ActivityEvent,
   type Listing,
@@ -204,7 +206,11 @@ async function refresh(): Promise<void> {
     // collection stats, which come from the reader and work regardless.
     try {
       const { deployed, listings: open } = await withTimeout(
-        readMarketState(marketConnection(), network),
+        readMarketState(marketConnection(), network, {
+          // When the configured endpoint fails, the public endpoint
+          // gets one try before the read gives up (ADR 0013).
+          fallbackConnection: createPublicMarketConnection(network),
+        }),
         MARKET_TIMEOUT_MS,
         "The market could not be reached in time.",
       );
@@ -214,7 +220,10 @@ async function refresh(): Promise<void> {
     } catch (error) {
       marketAvailability = "unknown";
       listings = [];
-      marketLoadError = friendlyMessage(error);
+      // Show the underlying cause when there is one, so a failing
+      // market read says WHAT failed instead of hiding it behind a
+      // generic note.
+      marketLoadError = withCause(friendlyMessage(error), error);
     }
 
     // A selected listing may have sold or been cancelled since it was

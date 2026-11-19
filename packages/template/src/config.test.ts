@@ -4,6 +4,7 @@ import {
   DEFAULT_NETWORK,
   GHOST_COLLECTION,
   clearRpcEndpointOverrides,
+  getDefaultRpcEndpoint,
   getEscrowProgramId,
   getNetworkConfig,
   loadCollectionConfig,
@@ -325,6 +326,38 @@ describe("RPC endpoint overrides", () => {
     expect(getNetworkConfig("devnet").rpcEndpoint).toBe(
       "https://api.devnet.solana.com",
     );
+  });
+});
+
+describe("getDefaultRpcEndpoint", () => {
+  afterEach(() => {
+    clearRpcEndpointOverrides();
+  });
+
+  it("returns the public endpoint for the network", () => {
+    expect(getDefaultRpcEndpoint("devnet")).toBe(
+      "https://api.devnet.solana.com",
+    );
+    expect(getDefaultRpcEndpoint("mainnet")).toBe(
+      "https://api.mainnet.solana.com",
+    );
+  });
+
+  it("ignores an endpoint override, so it stays usable as a fallback", () => {
+    setRpcEndpointOverride(
+      "devnet",
+      "https://devnet.helius-rpc.com/?api-key=test-key",
+    );
+
+    expect(getDefaultRpcEndpoint("devnet")).toBe(
+      "https://api.devnet.solana.com",
+    );
+  });
+
+  it("rejects an unknown network with a clear error", () => {
+    expect(() =>
+      getDefaultRpcEndpoint("testnet" as "devnet"),
+    ).toThrowError(/unknown network "testnet"/);
   });
 });
 
