@@ -567,6 +567,47 @@ a {
   font-size: 0.85rem;
 }
 
+/* ---- Graveyard scene -------------------------------------------------
+ * Full-width illustration closing the page (Ghost Mint only, for now):
+ * skeletons dancing around a jack-o'-lantern. The top and bottom edges
+ * fade into the page background so the picture melts into the dark
+ * instead of sitting in a hard box. A very slow zoom keeps it alive;
+ * transform-only, so it stays cheap. */
+.skel-graveyard {
+  margin: 0;
+  overflow: hidden;
+}
+
+.skel-graveyard-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    black 12%,
+    black 88%,
+    transparent
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    black 12%,
+    black 88%,
+    transparent
+  );
+  animation: skel-graveyard-zoom 45s ease-in-out infinite alternate;
+}
+
+@keyframes skel-graveyard-zoom {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.05);
+  }
+}
+
 @media (max-width: 640px) {
   .skel-hero-art {
     position: static;
@@ -583,6 +624,12 @@ a {
     padding-right: 1rem;
   }
 
+  .skel-graveyard-art {
+    height: 12rem;
+    object-fit: cover;
+    object-position: center 60%;
+  }
+
   .skel-vertical {
     display: none;
   }
@@ -595,7 +642,8 @@ a {
   .skel-hero-art,
   .skel-hero-art .skel-glow,
   .skel-hero-art g:last-child circle,
-  .skel-btn {
+  .skel-btn,
+  .skel-graveyard-art {
     animation: none;
   }
 
