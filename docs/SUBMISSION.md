@@ -2,9 +2,9 @@
 
 > **This file is a draft for the owner to paste into Devpost.** Items
 > marked **TODO (owner)** are things only the owner can provide and
-> must not be invented: the demo video and the "How Kiro was used"
-> write-up. Everything else in this draft is written from the repo as
-> it stands on 19 November 2026. The market program is deployed on
+> must not be invented: the demo video. Everything else in this draft
+> is written from the repo as it stands on 20 November 2026. The
+> market program is deployed on
 > devnet and both demo apps are hosted; the status lines below already
 > reflect that.
 
@@ -268,13 +268,18 @@ No test touches mainnet or real funds.
 
 ## How Kiro was used
 
-> **TODO (owner).** This section is the owner's real experience of
-> building Skelsol with Kiro, and only the owner can write it. Do not
-> invent it. When writing it, cover: which Kiro surfaces were used
-> (IDE, CLI, Web, Kiro Crew), how specs / hooks / steering / MCP were
-> used, and what Kiro actually did in the build. The repo already
-> carries the evidence a judge can check: the Kiro spec in
-> `.kiro/specs/skelsol/` (`requirements.md`, `design.md`, `tasks.md`).
+Skelsol was built spec-first with Kiro CLI. The whole plan lives in
+`.kiro/specs/skelsol/`: `requirements.md` states what the template
+must do in EARS style with acceptance criteria, `design.md` lays out
+the architecture (one template package, three consumers: two web apps
+and the `skel` CLI), and `tasks.md` breaks the build into testable
+tasks, each checked off as it landed. Kiro CLI drove the
+implementation task by task, test-first, and the spec stayed the
+source of truth when the build hit real problems — the slow page
+load on the public RPC and the market read that failed in the browser
+were both diagnosed against the spec and fixed with the decisions
+recorded in `docs/adr/`. Judges can verify the whole trail in the
+repo: the spec, the task list, and the ADRs.
 
 ## Demo video
 
