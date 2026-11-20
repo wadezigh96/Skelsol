@@ -34,6 +34,55 @@ describe("loadCollectionConfig", () => {
     });
   });
 
+  it("loads a config with known inscriptions", () => {
+    const config = loadCollectionConfig({
+      tick: "GHOST",
+      name: "Spooky Ghosts",
+      supply: 4444,
+      perWalletLimit: 4,
+      priceLamports: 0,
+      image: "https://example.com/skelsol/ghost.png",
+      metadataBaseUri: "https://example.com/skelsol/ghost/",
+      knownInscriptions: ["sig-one", "sig-two"],
+    });
+
+    expect(config.knownInscriptions).toEqual(["sig-one", "sig-two"]);
+  });
+
+  it("rejects knownInscriptions that is not an array of strings", () => {
+    expect(() =>
+      loadCollectionConfig({
+        tick: "GHOST",
+        name: "Spooky Ghosts",
+        supply: 4444,
+        perWalletLimit: 4,
+        priceLamports: 0,
+        image: "https://example.com/skelsol/ghost.png",
+        metadataBaseUri: "https://example.com/skelsol/ghost/",
+        knownInscriptions: "sig-one",
+      }),
+    ).toThrow(
+      'Invalid collection config: "knownInscriptions" must be an array of non-empty strings.',
+    );
+  });
+
+  it("rejects an empty string in knownInscriptions", () => {
+    expect(() =>
+      loadCollectionConfig({
+        tick: "GHOST",
+        name: "Spooky Ghosts",
+        supply: 4444,
+        perWalletLimit: 4,
+        priceLamports: 0,
+        image: "https://example.com/skelsol/ghost.png",
+        metadataBaseUri: "https://example.com/skelsol/ghost/",
+        knownInscriptions: ["sig-one", ""],
+      }),
+    ).toThrow(
+      'Invalid collection config: "knownInscriptions" must be an array of non-empty strings.',
+    );
+  });
+
   it("rejects a config with a missing tick", () => {
     expect(() =>
       loadCollectionConfig({
@@ -234,6 +283,12 @@ describe("GHOST_COLLECTION", () => {
     expect(GHOST_COLLECTION.supply).toBe(4444);
     expect(GHOST_COLLECTION.perWalletLimit).toBe(4);
     expect(GHOST_COLLECTION.priceLamports).toBe(0);
+  });
+
+  it("registers the first live devnet mint (20 Nov 2026)", () => {
+    expect(GHOST_COLLECTION.knownInscriptions).toEqual([
+      "4LS2AsdKr3KvgzBEM8WW9zE6RBW5fXcT5qtJruZHiNtgdo5o6V1FYKwpgXWrvrY7LisRmJdxWo3JhmmLg4t8H85F",
+    ]);
   });
 });
 

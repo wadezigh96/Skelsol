@@ -64,6 +64,9 @@ const SIG_ALICE_2 =
   "5TaRXMRS7XWX2RFpRNErgTumLzxfuwuZrC5htrbU5PEqzMAMUz7NeBGXEkNN4Q7yL7vuKmbk9cpXPLLQzifNdNW9";
 const SIG_BOB_1 =
   "4XTuPVXvapJKwwYh2S2qa29hcK6ZsagstbYi8hXdoApDCXZzG5V6NEpLnG2cDiYBVoQ8gsQDX91KHmvJG6gpyGwq";
+/** The first live devnet mint, registered on GHOST_COLLECTION (ADR 0015). */
+const SIG_GHOST_FIRST_MINT =
+  "4LS2AsdKr3KvgzBEM8WW9zE6RBW5fXcT5qtJruZHiNtgdo5o6V1FYKwpgXWrvrY7LisRmJdxWo3JhmmLg4t8H85F";
 
 /** All fixtures, newest first, the way getSignaturesForAddress returns them. */
 const ALL_FIXTURES = [
@@ -181,6 +184,19 @@ class FakeConnection implements ReaderConnection {
     this.order.push(signature);
   }
 
+  /**
+   * Add a transaction fetchable by signature but outside the live
+   * window (it never appears in getSignaturesForAddress results), as
+   * if its mint aged out of the memo scan: the registry's job is to
+   * find exactly these.
+   */
+  addOffWindowTransaction(
+    signature: string,
+    transaction: ReaderTransaction,
+  ): void {
+    this.transactions.set(signature, transaction);
+  }
+
   /** Add a signature whose transaction is gone (pruned), like live RPC. */
   addPrunedSignature(signature: string): void {
     this.order.push(signature);
@@ -247,8 +263,11 @@ describe("getCollectionState", () => {
       holders: 2,
       malformedMemos: 1,
       unverifiedInscriptions: 1,
-      scanned: 8,
+      // 8 live signatures plus the registered first mint, whose
+      // transaction is not in the fake (pruned): examined, skipped.
+      scanned: 9,
       failedFetches: 0,
+      fromRegistry: 0,
     });
   });
 
@@ -263,8 +282,11 @@ describe("getCollectionState", () => {
       holders: 0,
       malformedMemos: 0,
       unverifiedInscriptions: 0,
-      scanned: 0,
+      // No live signatures, but the registered first mint is still
+      // examined (its transaction is not in the fake: pruned).
+      scanned: 1,
       failedFetches: 0,
+      fromRegistry: 0,
     });
   });
 
@@ -304,7 +326,8 @@ describe("getCollectionState", () => {
     const state = await getCollectionState(connection, GHOST_COLLECTION);
     expect(state.minted).toBe(1);
     expect(state.failedFetches).toBe(1);
-    expect(state.scanned).toBe(2);
+    // Two live signatures plus the registered first mint (pruned here).
+    expect(state.scanned).toBe(3);
   });
 
   it("turns an RPC failure into a plain-words reader error", async () => {
@@ -335,6 +358,112 @@ describe("getCollectionState", () => {
   });
 });
 
+describe("known-inscription registry", () => {
+  /** GHOST_COLLECTION with the registry replaced by the given signatures. */
+  const configWithRegistry = (signatures: string[]): CollectionConfig =>
+    loadCollectionConfig({ ...GHOST_COLLECTION, knownInscriptions: signatures });
+
+  it("finds a registered mint that aged out of the live window", async () => {
+    const connection = new FakeConnection(["no-memo.json"]);
+    const { transaction } = loadFixture("mint-alice-1.json");
+    connection.addOffWindowTransaction(SIG_ALICE_1, transaction);
+    const config = configWithRegistry([SIG_ALICE_1]);
+
+    const state = await getCollectionState(connection, config);
+
+    expect(state.minted).toBe(1);
+    expect(state.holders).toBe(1);
+    expect(state.fromRegistry).toBe(1);
+    // One live signature plus one registered signature examined.
+    expect(state.scanned).toBe(2);
+    expect(state.failedFetches).toBe(0);
+  });
+
+  it("does not double-count a registered mint still in the live window", async () => {
+    const connection = new FakeConnection(["mint-alice-1.json"]);
+    const config = configWithRegistry([SIG_ALICE_1]);
+
+    const state = await getCollectionState(connection, config);
+
+    expect(state.minted).toBe(1);
+    expect(state.fromRegistry).toBe(0);
+    // Fetched once, through the live scan; the registry did not refetch it.
+    expect(connection.fetchedSignatures).toEqual([SIG_ALICE_1]);
+  });
+
+  it("skips a malformed registered transaction and counts it", async () => {
+    const connection = new FakeConnection([]);
+    const { signature, transaction } = loadFixture("malformed-memo.json");
+    connection.addOffWindowTransaction(signature, transaction);
+    const config = configWithRegistry([signature]);
+
+    const state = await getCollectionState(connection, config);
+
+    expect(state.minted).toBe(0);
+    expect(state.malformedMemos).toBe(1);
+    expect(state.fromRegistry).toBe(0);
+  });
+
+  it("excludes a registered inscription whose binding cannot be verified", async () => {
+    const connection = new FakeConnection([]);
+    const { signature, transaction } = loadFixture("unverified-mint.json");
+    connection.addOffWindowTransaction(signature, transaction);
+    const config = configWithRegistry([signature]);
+
+    const state = await getCollectionState(connection, config);
+
+    expect(state.minted).toBe(0);
+    expect(state.unverifiedInscriptions).toBe(1);
+    expect(state.fromRegistry).toBe(0);
+  });
+
+  it("skips a pruned registered signature without failing", async () => {
+    const connection = new FakeConnection([]);
+    const config = configWithRegistry([SIG_ALICE_1]);
+
+    const state = await getCollectionState(connection, config);
+
+    expect(state.minted).toBe(0);
+    expect(state.failedFetches).toBe(0);
+    expect(state.scanned).toBe(1);
+  });
+
+  it("counts a registered fetch failure and keeps reading", async () => {
+    const connection = new FakeConnection(["no-memo.json"]);
+    const { transaction } = loadFixture("mint-alice-1.json");
+    connection.addOffWindowTransaction(SIG_ALICE_1, transaction);
+    connection.fetchErrors.set(SIG_ALICE_1, new Error("429 Too Many Requests"));
+    const config = configWithRegistry([SIG_ALICE_1]);
+
+    const state = await getCollectionState(connection, config, {
+      sleep: async () => {},
+    });
+
+    expect(state.minted).toBe(0);
+    expect(state.failedFetches).toBe(1);
+  });
+
+  it("a registered mint appears in lookup, leaderboard, and mint limits", async () => {
+    const connection = new FakeConnection(["no-memo.json"]);
+    const { transaction } = loadFixture("mint-alice-1.json");
+    connection.addOffWindowTransaction(SIG_ALICE_1, transaction);
+    const config = configWithRegistry([SIG_ALICE_1]);
+
+    const found = await lookupWallet(connection, config, ALICE);
+    expect(found).toHaveLength(1);
+    expect(found[0]?.mint).toBe(MINT_ALICE_1);
+    expect(found[0]?.signature).toBe(SIG_ALICE_1);
+
+    const leaderboard = await getLeaderboard(connection, config);
+    expect(leaderboard).toEqual([{ wallet: ALICE, count: 1 }]);
+
+    const limits = await getMintLimits(connection, config, ALICE);
+    expect(limits.minted).toBe(1);
+    expect(limits.mintedByWallet).toBe(1);
+    expect(limits.canMint).toBe(true);
+  });
+});
+
 describe("fetch retries", () => {
   it("retries a rate-limited fetch with growing delays and succeeds", async () => {
     const connection = new FakeConnection(["mint-alice-1.json"]);
@@ -350,10 +479,13 @@ describe("fetch retries", () => {
     });
     expect(state.minted).toBe(1);
     expect(state.failedFetches).toBe(0);
+    // The flaky mint is fetched three times (two retries), then the
+    // registered first mint is fetched once (pruned in this fake).
     expect(connection.fetchedSignatures).toEqual([
       SIG_ALICE_1,
       SIG_ALICE_1,
       SIG_ALICE_1,
+      SIG_GHOST_FIRST_MINT,
     ]);
     expect(delays).toEqual([250, 500]);
   });
@@ -410,7 +542,12 @@ describe("fetch retries", () => {
     });
     expect(state.minted).toBe(0);
     expect(state.failedFetches).toBe(1);
-    expect(connection.fetchedSignatures).toHaveLength(1);
+    // One attempt for the flaky mint (no retries), then one fetch for
+    // the registered first mint (pruned in this fake).
+    expect(connection.fetchedSignatures).toEqual([
+      SIG_ALICE_1,
+      SIG_GHOST_FIRST_MINT,
+    ]);
     expect(delays).toEqual([]);
   });
 });
@@ -505,6 +642,10 @@ describe("parallel fetches", () => {
     // The older fetch finishes first; the scan must still keep the newest.
     connection.release(SIG_ALICE_2);
     connection.release(SIG_ALICE_1);
+    // The registry fetch gates next (a third gate); release it too, or
+    // the scan never finishes.
+    await waitFor(() => connection.pendingFetches >= 3);
+    connection.release(SIG_GHOST_FIRST_MINT);
     const activity = await pending;
     expect(activity).toHaveLength(1);
     expect(activity[0]?.signature).toBe(SIG_ALICE_1);
@@ -521,10 +662,12 @@ describe("signature cache", () => {
       cache,
     });
     expect(first.minted).toBe(1);
-    // The first scan fetched the mint and the pruned signature once each.
+    // The first scan fetched the mint, the pruned signature, and the
+    // registered first mint (pruned in this fake) once each.
     expect(connection.fetchedSignatures).toEqual([
       SIG_ALICE_1,
       SIG_ALICE_2,
+      SIG_GHOST_FIRST_MINT,
     ]);
 
     // A new mint lands on chain between scans.
@@ -533,16 +676,18 @@ describe("signature cache", () => {
       cache,
     });
     expect(second.minted).toBe(2);
-    expect(second.scanned).toBe(3);
+    expect(second.scanned).toBe(4);
     expect(second.failedFetches).toBe(0);
-    // Only the new signature was fetched; the mint and the pruned
-    // signature (cached as null) came from the cache.
+    // Only the new signature was fetched; the mint, the pruned
+    // signature, and the registered first mint (all cached, the last
+    // two as null) came from the cache.
     expect(connection.fetchedSignatures).toEqual([
       SIG_ALICE_1,
       SIG_ALICE_2,
+      SIG_GHOST_FIRST_MINT,
       SIG_BOB_1,
     ]);
-    expect(cache.size).toBe(3);
+    expect(cache.size).toBe(4);
   });
 
   it("does not cache a failed fetch, so a refresh retries it", async () => {
@@ -561,7 +706,14 @@ describe("signature cache", () => {
       cache,
     });
     expect(second.minted).toBe(1);
-    expect(connection.fetchedSignatures).toEqual([SIG_ALICE_1, SIG_ALICE_1]);
+    // First scan: the mint (failed, not cached), then the registered
+    // first mint (pruned, cached as null). Second scan: the mint again;
+    // the registered signature came from the cache.
+    expect(connection.fetchedSignatures).toEqual([
+      SIG_ALICE_1,
+      SIG_GHOST_FIRST_MINT,
+      SIG_ALICE_1,
+    ]);
   });
 });
 

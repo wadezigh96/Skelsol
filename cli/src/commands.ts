@@ -205,6 +205,11 @@ async function runStatus(parsed: ParsedArgs, deps: RunDeps): Promise<number> {
       `Unverified inscriptions excluded: ${state.unverifiedInscriptions}`,
     );
   }
+  if ((state.fromRegistry ?? 0) > 0) {
+    humanLines.push(
+      `Verified from the collection registry: ${state.fromRegistry}`,
+    );
+  }
   if ((state.failedFetches ?? 0) > 0) {
     humanLines.push(
       `Warning: ${state.failedFetches} of ${state.scanned} records could ` +
@@ -228,6 +233,7 @@ async function runStatus(parsed: ParsedArgs, deps: RunDeps): Promise<number> {
     unverifiedInscriptions: state.unverifiedInscriptions,
     scanned: state.scanned ?? 0,
     failedFetches: state.failedFetches ?? 0,
+    fromRegistry: state.fromRegistry ?? 0,
     floorPriceLamports: floor === null ? null : floor.toString(),
     floorPrice: floor === null ? null : formatLamportsBigint(floor),
     marketStatus: deployed ? "live" : "not-deployed",

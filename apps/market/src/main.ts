@@ -275,12 +275,22 @@ async function refresh(): Promise<void> {
     renderBuySection();
     // The reader survives rate limits by skipping failed fetches; say so
     // plainly instead of showing partial numbers as if they were complete.
-    statsStatus.textContent =
+    // A mint that aged out of the live memo window still counts through
+    // the collection registry (ADR 0015); say that plainly too.
+    const failedNote =
       (state.failedFetches ?? 0) > 0
         ? `Some records could not be read (${state.failedFetches} of ` +
           `${state.scanned} failed). The numbers above may be incomplete — ` +
           `refresh to try again.`
         : "";
+    const registryCount = state.fromRegistry ?? 0;
+    const registryNote =
+      registryCount > 0
+        ? `Includes ${registryCount} verified inscription${registryCount === 1 ? "" : "s"} from the collection registry.`
+        : "";
+    statsStatus.textContent = [failedNote, registryNote]
+      .filter((note) => note.length > 0)
+      .join(" ");
     await refreshSellCandidates();
   } catch (error) {
     statsStatus.textContent = friendlyMessage(error);

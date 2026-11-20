@@ -35,6 +35,19 @@ export interface CollectionConfig {
   image: string;
   /** Base URI the carrier NFT metadata URIs are built from. */
   metadataBaseUri: string;
+  /**
+   * Mint-transaction signatures the reader always fetches directly,
+   * in addition to the live memo scan: the collection's known
+   * inscriptions. The live scan only covers the most recent memo
+   * transactions (see `DEFAULT_SCAN_LIMIT`), and on a busy network
+   * that window slides past a mint within seconds, so a mint that
+   * aged out of the window would vanish from every count. A
+   * registered signature is verified exactly like a scanned one (the
+   * memo is parsed from the real transaction and the mint binding is
+   * checked); the registry only tells the reader where to look. See
+   * ADR 0015.
+   */
+  knownInscriptions?: string[];
 }
 
 /** Error thrown when a config fails validation at load. */
@@ -140,6 +153,13 @@ export function loadCollectionConfig(raw: unknown): CollectionConfig {
   if (treasury !== undefined) {
     config.treasury = treasury;
   }
+  const knownInscriptions = requireOptionalStringArray(
+    input,
+    "knownInscriptions",
+  );
+  if (knownInscriptions !== undefined) {
+    config.knownInscriptions = knownInscriptions;
+  }
   return config;
 }
 
@@ -173,6 +193,31 @@ function requireOptionalAddress(
 }
 
 /**
+ * Read an optional array-of-strings field: absent (or explicitly null)
+ * means no entries; present means an array of non-empty strings, or a
+ * `ConfigError` naming the field.
+ */
+function requireOptionalStringArray(
+  input: Record<string, unknown>,
+  field: string,
+): string[] | undefined {
+  const value = input[field];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (
+    !Array.isArray(value) ||
+    value.some((entry) => typeof entry !== "string" || entry.length === 0)
+  ) {
+    throw new ConfigError(
+      `Invalid collection config: "${field}" must be an array of ` +
+        `non-empty strings.`,
+    );
+  }
+  return [...(value as string[])];
+}
+
+/**
  * The Ghost collection: the demo inscription series shipped with the
  * template. Free mint (price 0 lamports, rent only).
  *
@@ -189,6 +234,13 @@ export const GHOST_COLLECTION: CollectionConfig = loadCollectionConfig({
   priceLamports: 0,
   image: "https://skelsol-ghost-mint.vercel.app/assets/ghost.svg",
   metadataBaseUri: "https://skelsol-ghost-mint.vercel.app/assets/",
+  // The first live devnet mint (20 Nov 2026, minter AqNex3qwMyxzCi6dRTfvmJ8FdMFzMrGDFPXRmWZG1wtK,
+  // carrier NFT CzTUinyVnogVvfgH87AruwwAT6QfVZvbAa4CnXwbTP7x). The live
+  // scan can no longer reach it — see ADR 0015 — so it is registered
+  // here. Add later mints to this list as they age out of the window.
+  knownInscriptions: [
+    "4LS2AsdKr3KvgzBEM8WW9zE6RBW5fXcT5qtJruZHiNtgdo5o6V1FYKwpgXWrvrY7LisRmJdxWo3JhmmLg4t8H85F",
+  ],
 });
 
 /** The Solana networks the template supports. */

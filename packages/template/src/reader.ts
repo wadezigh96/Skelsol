@@ -281,6 +281,15 @@ export interface CollectionState {
    * by {@link getCollectionState}.
    */
   failedFetches?: number;
+  /**
+   * Verified inscriptions found through the collection's known-
+   * inscription registry (`knownInscriptions`) rather than the live
+   * memo scan: older mints the live window can no longer reach. They
+   * are verified exactly like scanned ones and are included in
+   * `minted`; this count only says where they came from. Always
+   * present on states built by {@link getCollectionState}.
+   */
+  fromRegistry?: number;
 }
 
 /** One holder on the leaderboard. */
@@ -370,6 +379,12 @@ interface ScanResult {
   scanned: number;
   /** Fetches that failed even after retries. */
   failedFetches: number;
+  /**
+   * Verified inscriptions found through the registry that the live
+   * scan did not already find (a registered signature that is still
+   * inside the live window counts as scanned, not registered).
+   */
+  registeredInscriptions: number;
 }
 
 /** The memo program's log line shape (see research §2.4). */
@@ -545,6 +560,10 @@ async function fetchTransactions(
  * skipped. A fetch that fails is skipped and counted, never fatal:
  * only a failed signature listing fails the whole scan (as an
  * `rpc-error`), because without it there is nothing to scan at all.
+ * After the live scan, the collection's known-inscription registry
+ * (`knownInscriptions`) is fetched directly by signature and merged
+ * in the same way, so mints that aged out of the live window stay
+ * visible (see ADR 0015).
  */
 async function scanCollection(
   connection: ReaderConnection,
@@ -605,36 +624,44 @@ async function scanCollection(
   let scanned = 0;
   let failedFetches = 0;
 
-  for (const info of signatures) {
-    scanned += 1;
-    // A failed transaction never minted anything; skip it without fetching.
-    if (info.err !== null && info.err !== undefined) {
-      continue;
-    }
-    let transaction: ReaderTransaction | null;
-    const cached = cache?.get(info.signature);
+  // Resolve a signature to its transaction: the cache first, then this
+  // scan's fetch results. Returns "failed" when the fetch failed even
+  // after retries (absent from both, never cached, so a refresh retries
+  // it); returns null when the transaction is gone (pruned).
+  const resolveTransaction = (
+    signature: string,
+    fetchedMap: Map<string, ReaderTransaction | null>,
+  ): ReaderTransaction | null | "failed" => {
+    const cached = cache?.get(signature);
     if (cached !== undefined) {
       // Already fetched on an earlier scan (null means pruned).
-      transaction = cached;
-    } else if (fetched.has(info.signature)) {
+      return cached;
+    }
+    if (fetchedMap.has(signature)) {
       // Fetched in this scan. (Only reachable without a cache: with
       // one, the fetch phase cached it, so the branch above hit.)
-      transaction = fetched.get(info.signature) ?? null;
-    } else {
-      // A fetch that failed even after retries: every fetchable
-      // signature is either fetched or failed, so this is a failed
-      // one. One unreadable record must not sink the whole scan: it
-      // is skipped and counted, and the caller reports it honestly.
-      // It is not cached, so a refresh retries it.
-      failedFetches += 1;
-      continue;
+      return fetchedMap.get(signature) ?? null;
     }
+    return "failed";
+  };
+
+  // Consider one transaction for the collection: extract its memos,
+  // keep the verified inscriptions for this collection, and count the
+  // rest honestly. Returns how many NEW inscriptions it added (a mint
+  // already found keeps its first record). The live scan and the
+  // registry share this path, so a registered inscription is verified
+  // exactly like a scanned one.
+  const considerTransaction = (
+    signature: string,
+    transaction: ReaderTransaction | null,
+  ): number => {
     if (transaction === null || transaction.meta === null) {
-      continue;
+      return 0;
     }
     if (transaction.meta.err !== null && transaction.meta.err !== undefined) {
-      continue;
+      return 0;
     }
+    let added = 0;
     const memos = extractMemos(transaction.meta.logMessages ?? []);
     for (const memo of memos) {
       if (memo === null) {
@@ -667,12 +694,64 @@ async function scanCollection(
           inscription: parsed.inscription,
           mint: parsed.inscription.mint,
           holder,
-          signature: info.signature,
+          signature,
           blockTime: transaction.blockTime ?? null,
           slot: transaction.slot,
         });
+        added += 1;
       }
     }
+    return added;
+  };
+
+  for (const info of signatures) {
+    scanned += 1;
+    // A failed transaction never minted anything; skip it without fetching.
+    if (info.err !== null && info.err !== undefined) {
+      continue;
+    }
+    const transaction = resolveTransaction(info.signature, fetched);
+    if (transaction === "failed") {
+      // One unreadable record must not sink the whole scan: it is
+      // skipped and counted, and the caller reports it honestly.
+      failedFetches += 1;
+      continue;
+    }
+    considerTransaction(info.signature, transaction);
+  }
+
+  // The registry: mint transactions the collection knows about, fetched
+  // directly by signature. The live window above only covers the most
+  // recent memo transactions, and on a busy network it slides past a
+  // mint within seconds (see ADR 0015); a registered mint stays
+  // visible however old it gets. A registered signature that is still
+  // inside the live window was already fetched above, so it is not
+  // fetched twice and counts as scanned, not registered.
+  const liveSignatures = new Set(signatures.map((info) => info.signature));
+  const knownSignatures = (config.knownInscriptions ?? []).filter(
+    (signature) => !liveSignatures.has(signature),
+  );
+  const knownToFetch = knownSignatures.filter(
+    (signature) => cache?.get(signature) === undefined,
+  );
+  const knownFetched = await fetchTransactions(
+    connection,
+    knownToFetch,
+    maxFetchAttempts,
+    retryBaseDelayMs,
+    sleep,
+    fetchConcurrency,
+    cache,
+  );
+  let registeredInscriptions = 0;
+  for (const signature of knownSignatures) {
+    scanned += 1;
+    const transaction = resolveTransaction(signature, knownFetched);
+    if (transaction === "failed") {
+      failedFetches += 1;
+      continue;
+    }
+    registeredInscriptions += considerTransaction(signature, transaction);
   }
 
   return {
@@ -681,6 +760,7 @@ async function scanCollection(
     unverifiedInscriptions,
     scanned,
     failedFetches,
+    registeredInscriptions,
   };
 }
 
@@ -730,6 +810,7 @@ function stateFromScan(
     unverifiedInscriptions: scan.unverifiedInscriptions,
     scanned: scan.scanned,
     failedFetches: scan.failedFetches,
+    fromRegistry: scan.registeredInscriptions,
   };
 }
 

@@ -388,14 +388,20 @@ of the project, not footnotes.
   steps through late 2026, so the mint client queries the live rent
   minimum at runtime. Any fixed "mint costs X SOL" figure would go
   stale.
-- **The reader only sees the most recent 20 memo transactions.**
-  Every count on the page (minted, minters, leaderboard, activity)
-  comes from scanning the 20 most recent transactions that touched
-  the Memo program, network-wide, newest first (the reader's
-  `DEFAULT_SCAN_LIMIT` is 20). Those 20 slots are shared with every
-  other memo on the network, not just GHOST mints, so once memo
-  traffic grows, older GHOST mints fall out of view and the counts
-  undercount. There is no pagination yet; the apps cache fetched
+- **The reader only sees the most recent 20 memo transactions — plus
+  the known-inscription registry.** Every count on the page (minted,
+  minters, leaderboard, activity) comes from scanning the 20 most
+  recent transactions that touched the Memo program, network-wide,
+  newest first (the reader's `DEFAULT_SCAN_LIMIT` is 20). Those 20
+  slots are shared with every other memo on the network, not just
+  GHOST mints: measured on devnet in Nov 2026, 20 memo transactions
+  span about 9 seconds, so a mint falls out of the live window
+  within about a minute. Mints that aged out stay visible through
+  the collection's `knownInscriptions` registry (see ADR 0015):
+  registered mint transactions are fetched directly by signature
+  and verified exactly like scanned ones. The registry is a static
+  index — new mints must be added to it as they age out — until a
+  real indexer service replaces it. The apps cache fetched
   transactions per session so a refresh re-reads only new ones.
 - **Carrier NFT metadata is per-mint, but the file is shared.** The
   mint client points each carrier NFT at

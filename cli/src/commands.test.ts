@@ -6,7 +6,7 @@ import {
 } from "@solana/web3.js";
 import { describe, expect, it } from "vitest";
 
-import { deriveListingAddress } from "@skelsol/template";
+import { GHOST_COLLECTION, deriveListingAddress } from "@skelsol/template";
 
 import { parseArgs, type ParsedArgs } from "./args.js";
 import { runCommand, type RunDeps } from "./commands.js";
@@ -80,6 +80,12 @@ function encodeListing(
 interface FakeConnectionOptions {
   /** Mint transactions the reader scan finds (empty by default). */
   mintTxs?: Array<Record<string, unknown>>;
+  /**
+   * A mint transaction returned for the collection's registered
+   * signature, as if its mint aged out of the live window (none by
+   * default: the registered fetch then returns null, pruned).
+   */
+  registeredTx?: Record<string, unknown>;
   /** Signatures whose getParsedTransaction throws (none by default). */
   failingSignatures?: Set<string>;
   /** Whether the escrow program account exists (false by default). */
@@ -93,6 +99,7 @@ interface FakeConnectionOptions {
 /** A fake web3.js Connection: no network, everything recorded. */
 function createFakeConnection(options: FakeConnectionOptions = {}) {
   const mintTxs = options.mintTxs ?? [];
+  const registeredSignature = GHOST_COLLECTION.knownInscriptions?.[0];
   const sent: Buffer[] = [];
   const confirmed: string[] = [];
   const connection = {
@@ -113,6 +120,13 @@ function createFakeConnection(options: FakeConnectionOptions = {}) {
     ): Promise<Record<string, unknown> | null> {
       if (options.failingSignatures?.has(signature) === true) {
         throw new Error("boom");
+      }
+      if (
+        registeredSignature !== undefined &&
+        signature === registeredSignature &&
+        options.registeredTx !== undefined
+      ) {
+        return options.registeredTx;
       }
       const index = Number(signature.replace("sig-", "")) - 1;
       return mintTxs[index] ?? null;
@@ -318,8 +332,10 @@ describe("runCommand: status", () => {
     const harness = makeDeps(connection);
     const exit = await runCommand(mustParse(["status"]), harness.deps);
     expect(exit).toBe(0);
+    // One live record failed; the scan examined two records in total
+    // (the live one plus the registered first mint).
     expect(harness.stdoutLines.join("\n")).toMatch(
-      /warning: 1 of 1 records could not be read/i,
+      /warning: 1 of 2 records could not be read/i,
     );
     expect(harness.stdoutLines.join("\n")).toMatch(/may be incomplete/i);
   });
@@ -335,8 +351,26 @@ describe("runCommand: status", () => {
       string,
       unknown
     >;
-    expect(json["scanned"]).toBe(1);
+    expect(json["scanned"]).toBe(2);
     expect(json["failedFetches"]).toBe(1);
+    expect(json["fromRegistry"]).toBe(0);
+  });
+
+  it("says how many verified inscriptions came from the collection registry", async () => {
+    const connection = createFakeConnection({
+      registeredTx: makeMintTx(
+        mintKeypair.publicKey.toBase58(),
+        agentKeypair.publicKey.toBase58(),
+        GHOST_COLLECTION.knownInscriptions?.[0] ?? "registered-sig",
+        7,
+      ),
+    });
+    const harness = makeDeps(connection);
+    const exit = await runCommand(mustParse(["status"]), harness.deps);
+    expect(exit).toBe(0);
+    const out = harness.stdoutLines.join("\n");
+    expect(out).toMatch(/minted: 1 of 4444/i);
+    expect(out).toMatch(/verified from the collection registry: 1/i);
   });
 });
 
