@@ -11,7 +11,9 @@
 > https://devpost.com/software/skelsol). Category: Skeleton Crew.
 > No bonus prize was selected (the "Best Demo" bonus was not offered
 > in the form). The submission stays editable until the deadline
-> (4 December 2026, 2:00 pm Pacific Time).
+> (4 December 2026, 2:00 pm Pacific Time). A live mint and one
+> market listing were proven on devnet on 20 November 2026 (see
+> Current status).
 
 ## Project title
 
@@ -141,8 +143,9 @@ flow for free; a network switch moves each app to mainnet.
 - **No browser wallet in the build environment.** The hosted apps
   have been checked in a real browser (stats, market status,
   listings — the market was verified live on devnet on 19 Nov
-  2026), but the wallet handshake and a live mint with
-  Phantom/Solflare still need a human with a wallet in a real
+  2026, and the first live mint and listing were verified on both
+  sites on 20 Nov 2026), but the wallet handshake with
+  Phantom/Solflare still needs a human with a wallet in a real
   browser; the README says so.
 
 ### What's next
@@ -151,10 +154,10 @@ flow for free; a network switch moves each app to mainnet.
   placeholder image URL) and the off-chain metadata JSON on durable
   storage (Arweave/IPFS).
 - **A real-browser test pass** with Phantom and Solflare: the wallet
-  handshake and a live mint are the only parts of the demo flow not
-  yet exercised in a real browser (the market program is deployed,
-  both apps are hosted, and the stats and market status were
-  re-checked on 19 Nov 2026).
+  handshake is the only part of the demo flow not yet exercised in
+  a real browser (the mint and listing are proven on devnet, the
+  market program is deployed, both apps are hosted, and the stats
+  and market status were re-checked on 20 Nov 2026).
 - **Metaplex Core migration path** for lower mint cost if the
   compatibility trade-off ever flips (documented in ADR 0002).
 - **On-chain inscription accounts** (LibrePlex or Metaplex
@@ -174,10 +177,23 @@ flow for free; a network switch moves each app to mainnet.
   https://skelsol-ghost-mint.vercel.app and Inscription Market at
   https://skelsol-market.vercel.app. They build to static sites
   (`apps/ghost-mint/dist/`, `apps/market/dist/`).
-- **The wallet handshake and live mint in a real browser have not
-  been tested** (they need a human with a wallet in a real browser).
-  The stats, market status, and listings pages have been checked in
-  a real browser on 19 Nov 2026.
+- **First live mint and listing proven on devnet (20 Nov 2026):**
+  one GHOST inscription was minted with the `skel` CLI (transaction
+  `4LS2AsdKr3KvgzBEM8WW9zE6RBW5fXcT5qtJruZHiNtgdo5o6V1FYKwpgXWrvrY7LisRmJdxWo3JhmmLg4t8H85F`,
+  carrier NFT `CzTUinyVnogVvfgH87AruwwAT6QfVZvbAa4CnXwbTP7x`, actual
+  cost 0.01705088 SOL) and listed at 0.1 SOL (transaction
+  `4jjNt2PrjzMsyeQFfPCPnSR1y58v9ox6C2jJUKKpqcE9umtpzs8kRDEpJrHqxwi8aQwj3nbvYw54nV3VdkZNjV3C`,
+  listing `317LPm6FsCypQYG15rLFWBpt5JDCKeBYyJnymB1qZ41o`). Both live
+  sites were re-checked in a real browser the same evening and show
+  Minted 1 / 4,444, Minters 1, Listings 1, Floor 0.1 SOL. The test
+  also exposed a reader bug (the live scan only sees the last 20
+  memo transactions, about 9 seconds of devnet traffic) and fixed
+  it with a known-inscription registry (ADR 0015).
+- **The browser wallet handshake has not been tested** (it needs a
+  human with a wallet in a real browser). The mint and listing flow
+  itself is proven end to end on devnet (see above), and the stats,
+  market status, and listings pages were re-checked in a real
+  browser on 20 Nov 2026.
 
 ## Judge testing instructions
 
@@ -225,6 +241,8 @@ faucet, not `solana airdrop`.)
 > Program explorer page:
 > https://explorer.solana.com/address/3XMFqwbEND9gYWoTahNQPhVoNspHet1PfdizsRymqwNo?cluster=devnet
 > (deployed 19 Nov 2026; transaction `4RC4UVyowp6Ss9jkKVZQzq35hwaNAKnwg3Sk1xPAFhoWkbp26TLdxL6tjhMqmPXyicE23gtd69GWutNnFj4pakoM`).
+> A listing is already live on devnet (1 GHOST at 0.1 SOL), so
+> step 4 can be tried right away with a second wallet.
 
 1. Open the Market demo link: https://skelsol-market.vercel.app
 2. Connect the wallet that holds a carrier NFT.
