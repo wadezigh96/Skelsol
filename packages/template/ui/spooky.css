@@ -700,6 +700,12 @@ a {
     padding-right: 1rem;
   }
 
+  /* The top bar holds four items now (wordmark, network switch,
+   * wallet, sound); let them wrap instead of overflowing. */
+  .skel-topbar {
+    flex-wrap: wrap;
+  }
+
   .skel-graveyard-art {
     height: 12rem;
     object-fit: cover;

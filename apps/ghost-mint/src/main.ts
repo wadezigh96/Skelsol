@@ -106,6 +106,10 @@ const MARKET_TIMEOUT_MS = 15_000;
 const readerCache = new Map<string, ReaderTransaction | null>();
 
 const walletButton = element<HTMLButtonElement>("wallet-button");
+const soundButton = element<HTMLButtonElement>("sound-button");
+const horrorAudio = element<HTMLAudioElement>("horror-audio");
+// Half volume: atmosphere, not a jumpscare.
+horrorAudio.volume = 0.5;
 const walletPicker = element<HTMLElement>("wallet-picker");
 const walletPickerList = element<HTMLElement>("wallet-picker-list");
 const devnetButton = element<HTMLButtonElement>("network-devnet");
@@ -498,8 +502,30 @@ function startGraveyardVideo(): void {
   });
 }
 
+// Horror ambience: browsers block sound autoplay, so the music only
+// starts when the visitor taps the sound button. Off by default,
+// loops quietly at half volume once on.
+function onSoundButton(): void {
+  if (horrorAudio.paused) {
+    soundButton.setAttribute("aria-pressed", "true");
+    soundButton.textContent = "Sound on";
+    void horrorAudio.play().catch(() => {
+      // Playback was blocked; the button goes back to off.
+      soundButton.setAttribute("aria-pressed", "false");
+      soundButton.textContent = "Sound off";
+    });
+  } else {
+    horrorAudio.pause();
+    soundButton.setAttribute("aria-pressed", "false");
+    soundButton.textContent = "Sound off";
+  }
+}
+
 walletButton.addEventListener("click", () => {
   void onWalletButton();
+});
+soundButton.addEventListener("click", () => {
+  onSoundButton();
 });
 devnetButton.addEventListener("click", () => switchNetwork("devnet"));
 mainnetButton.addEventListener("click", () => switchNetwork("mainnet"));

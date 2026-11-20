@@ -46,6 +46,15 @@
       <button id="wallet-button" class="skel-btn skel-btn-ghost" type="button">
         Connect wallet
       </button>
+      <button
+        id="sound-button"
+        class="skel-btn skel-btn-ghost"
+        type="button"
+        aria-pressed="false"
+        aria-label="Toggle horror ambience music"
+      >
+        Sound off
+      </button>
     </header>
     <div id="wallet-picker" class="skel-section" hidden>
       <p class="skel-note">Choose a wallet to connect:</p>
@@ -267,8 +276,23 @@
       Skelsol — a lean template for SPL-20-style inscriptions on Solana.
       Kiroween 2026, Skeleton Crew. The page never asks for a seed phrase
       or private key: your wallet signs, the page only builds the
-      transaction.
+      transaction. Music: "The Dread" by Kevin MacLeod
+      (<a href="https://incompetech.com">incompetech.com</a>), licensed
+      under
+      <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.
     </footer>
+
+    <!-- Horror ambience: silent until the visitor turns it on.
+         Browsers block sound autoplay, so there is no autoplay
+         attribute — playback starts from main.ts on tap. Music:
+         "The Dread" by Kevin MacLeod (incompetech.com), CC BY 4.0
+         (attribution in the footer above). -->
+    <audio
+      id="horror-audio"
+      src="./assets/horror-ambience.mp3"
+      loop
+      preload="none"
+    ></audio>
 
     <script type="module" src="./main.js"></script>
   </body>
