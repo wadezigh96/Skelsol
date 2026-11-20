@@ -6,7 +6,12 @@
 > devnet and both demo apps are hosted; the status lines below already
 > reflect that. The demo video was uploaded publicly to YouTube on
 > 20 November 2026 (https://youtu.be/HBE63hOJhyI, 1:53, under the
-> 3-minute limit).
+> 3-minute limit). Submitted to Kiroween 2026 on Devpost 20 November
+> 2026 (submission ID 1313223,
+> https://devpost.com/software/skelsol). Category: Skeleton Crew.
+> No bonus prize was selected (the "Best Demo" bonus was not offered
+> in the form). The submission stays editable until the deadline
+> (4 December 2026, 2:00 pm Pacific Time).
 
 ## Project title
 
