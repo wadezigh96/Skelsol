@@ -1,12 +1,12 @@
 # Skelsol — Devpost submission draft (Kiroween 2026)
 
-> **This file is a draft for the owner to paste into Devpost.** Items
-> marked **TODO (owner)** are things only the owner can provide and
-> must not be invented: the demo video. Everything else in this draft
-> is written from the repo as it stands on 20 November 2026. The
+> **This file is a draft for the owner to paste into Devpost.** It is
+> written from the repo as it stands on 20 November 2026. The
 > market program is deployed on
 > devnet and both demo apps are hosted; the status lines below already
-> reflect that.
+> reflect that. The demo video was uploaded publicly to YouTube on
+> 20 November 2026 (https://youtu.be/HBE63hOJhyI, 1:53, under the
+> 3-minute limit).
 
 ## Project title
 
@@ -30,7 +30,7 @@ consumer, the `skel` CLI for AI agents.
 | Repository | https://github.com/wadezigh96/Skelsol |
 | Ghost Mint (demo) | https://skelsol-ghost-mint.vercel.app |
 | Inscription Market (demo) | https://skelsol-market.vercel.app |
-| Demo video (under 3 minutes) | TODO (owner) — to be recorded by the owner; see "Demo video" below |
+| Demo video (under 3 minutes) | https://youtu.be/HBE63hOJhyI (uploaded publicly 20 Nov 2026, 1:53) |
 | Hackathon | https://kiroween.devpost.com |
 
 ## Description
@@ -156,7 +156,7 @@ flow for free; a network switch moves each app to mainnet.
   `mpl-inscription`) if a future feature ever needs a program to read
   inscription content — memo data cannot be read on-chain.
 
-## Current status (19 November 2026 — update before submitting)
+## Current status (20 November 2026)
 
 - **Minting works on devnet today**, verified live via `skel status`.
   It needs no custom program.
@@ -283,12 +283,15 @@ repo: the spec, the task list, and the ADRs.
 
 ## Demo video
 
-> **TODO (owner).** Record a public video under 3 minutes showing:
-> getting devnet SOL from the faucet, minting a GHOST inscription in
-> Ghost Mint and finding the inscription JSON in the explorer, the
-> leaderboard and activity feed, listing/buying/cancelling in the
-> Market (once the program is deployed), and one `skel` command in a
-> terminal. Paste the public link here and in the Devpost form.
+https://youtu.be/HBE63hOJhyI
+
+Uploaded publicly to YouTube 20 November 2026. Duration 1:53 (under
+the 3-minute limit). Title on YouTube: "Skelsol — Skeleton SPL-20
+Inscriptions token on Solana | Kiroween 2026". The video shows both
+live demo apps (Ghost Mint and the Inscription Market), the `skel`
+CLI, and the `.kiro` spec trail on GitHub, with narration and the
+"The Dread" music bed (CC-BY, credited in the video description).
+Paste this link into the Devpost form.
 
 ## Built with
 
