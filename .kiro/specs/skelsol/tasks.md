@@ -39,7 +39,7 @@ per refresh, parallel fetches, fast-fail 429s).
   - [x] 6.2 Ghost Mint page wired to the mint client and reader
   - [x] 6.3 Network switch (devnet default, mainnet toggle)
   - [x] 6.4 Page loads and typechecks; mint flow verified against fixtures
-- [ ] 7. Escrow program (ticket 07, blocked by Anchor toolchain approval)
+- [x] 7. Escrow program (ticket 07, blocked by Anchor toolchain approval)
   - [x] 7.1 Anchor program: `list`, `buy`, `cancel` (SOL leg, 1% fee)
   - [x] 7.2 Anchor tests: happy paths, seller-only cancel, wrong-price rejection
   - [x] 7.3 Deploy to devnet; record program ID in `docs/DEPLOY.md` (deployed 19 Nov 2026)

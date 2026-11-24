@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Run tests and typecheck after task completion",
+      "trigger": "PostTaskExec",
+      "description": "Runs npm test and npm run typecheck when a spec task is marked done, per the Skelsol quality gates (requirements 10.1, 10.2).",
+      "action": {
+        "type": "command",
+        "command": "npm test && npm run typecheck",
+        "timeout": 120
+      }
+    }
+  ]
+}
