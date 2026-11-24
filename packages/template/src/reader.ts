@@ -130,6 +130,7 @@ export interface ParsedTransactionConnection {
   ): Promise<ConfirmedSignatureInfo[]>;
   getParsedTransaction(
     signature: string,
+    config?: { maxSupportedTransactionVersion?: number },
   ): Promise<ParsedTransactionWithMeta | null>;
 }
 
@@ -145,8 +146,16 @@ export function toReaderConnection(
   return {
     getSignaturesForAddress: (address, options) =>
       connection.getSignaturesForAddress(address, options),
+    // Ask for versioned transactions: without maxSupportedTransactionVersion
+    // the node rejects them with JSON-RPC error -32015, and the devnet
+    // memo window regularly contains versioned (v0 and v1) transactions
+    // from other programs, which used to surface as "records could not
+    // be read". 1 is the newest version web3.js 1.99 supports; bump it
+    // if a newer web3.js supports a newer version.
     getTransaction: (signature) =>
-      connection.getParsedTransaction(signature),
+      connection.getParsedTransaction(signature, {
+        maxSupportedTransactionVersion: 1,
+      }),
   };
 }
 

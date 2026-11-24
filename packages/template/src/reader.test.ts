@@ -1013,6 +1013,10 @@ class FakeParsedConnection implements ParsedTransactionConnection {
   readonly queriedLimits: Array<number | undefined> = [];
   /** Signatures getParsedTransaction was called with. */
   readonly fetchedSignatures: string[] = [];
+  /** Configs getParsedTransaction was called with. */
+  readonly fetchedConfigs: Array<
+    { maxSupportedTransactionVersion?: number } | undefined
+  > = [];
 
   constructor(fixtureNames: string[]) {
     for (const name of fixtureNames) {
@@ -1020,6 +1024,12 @@ class FakeParsedConnection implements ParsedTransactionConnection {
       this.transactions.set(signature, transaction);
       this.order.push(signature);
     }
+  }
+
+  /** Add a transaction directly, as if it came from the RPC. */
+  addTransaction(signature: string, transaction: ReaderTransaction): void {
+    this.transactions.set(signature, transaction);
+    this.order.push(signature);
   }
 
   async getSignaturesForAddress(
@@ -1043,8 +1053,10 @@ class FakeParsedConnection implements ParsedTransactionConnection {
 
   async getParsedTransaction(
     signature: string,
+    config?: { maxSupportedTransactionVersion?: number },
   ): Promise<ParsedTransactionWithMeta | null> {
     this.fetchedSignatures.push(signature);
+    this.fetchedConfigs.push(config);
     const tx = this.transactions.get(signature);
     // The fixture shape is the reader's subset of a parsed transaction;
     // the adapter passes it through untouched, so the cast is safe here.
@@ -1100,4 +1112,39 @@ describe("toReaderConnection", () => {
 
     await expect(connection.getTransaction(SIG_ALICE_1)).resolves.toBeNull();
   });
+
+  it("asks the RPC for versioned transactions", async () => {
+    const parsed = new FakeParsedConnection(["mint-alice-1.json"]);
+    const connection = toReaderConnection(parsed);
+
+    await connection.getTransaction(SIG_ALICE_1);
+
+    // Without maxSupportedTransactionVersion the node rejects
+    // versioned transactions with JSON-RPC error -32015, and the
+    // devnet memo window regularly contains them (v0 and v1), which
+    // used to surface as "records could not be read".
+    expect(parsed.fetchedConfigs).toEqual([
+      { maxSupportedTransactionVersion: 1 },
+    ]);
+  });
+
+  it.each([0, 1])(
+    "reads a version-%i transaction carrying a GHOST memo as an inscription",
+    async (version) => {
+      const parsed = new FakeParsedConnection([]);
+      const { signature, transaction } = loadFixture("mint-alice-1.json");
+      // The reader only consumes logMessages, accountKeys, and token
+      // balances, which a versioned parsed transaction carries in the
+      // same shape; the version field rides along untouched.
+      const versioned = { ...transaction, version };
+      parsed.addTransaction(signature, versioned);
+      const connection = toReaderConnection(parsed);
+
+      const state = await getCollectionState(connection, GHOST_COLLECTION);
+
+      expect(state.minted).toBe(1);
+      expect(state.holders).toBe(1);
+      expect(state.failedFetches).toBe(0);
+    },
+  );
 });
