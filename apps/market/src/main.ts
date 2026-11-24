@@ -9,13 +9,14 @@ import {
   explorerTransactionUrl,
   getCollectionOverview,
   GHOST_COLLECTION,
-  lookupWallet,
+  lookupOwnedInscriptions,
   MarketError,
   readMarketState,
   setRpcEndpointOverride,
   shortenAddress,
   timeAgo,
   toMarketConnection,
+  toOwnedLookupConnection,
   toReaderConnection,
   WalletAdapter,
   withCause,
@@ -161,6 +162,10 @@ const activityEmpty = element<HTMLElement>("activity-empty");
 
 function readerConnection() {
   return toReaderConnection(adapter.getConnection());
+}
+
+function ownedLookupConnection() {
+  return toOwnedLookupConnection(adapter.getConnection());
 }
 
 function marketConnection() {
@@ -453,11 +458,11 @@ function renderSellForm(): void {
     sellNote.textContent = "Connect Phantom or Solflare to list one of your carrier NFTs.";
   } else if (ownedInscriptions.length === 0) {
     sellNote.textContent =
-      "This wallet has minted no GHOST inscriptions yet. Mint one in " +
+      "This wallet owns no GHOST inscriptions yet. Mint one in " +
       "Ghost Mint first.";
   } else if (candidates.length === 0) {
     sellNote.textContent =
-      "Every inscription this wallet minted is already listed.";
+      "Every inscription this wallet owns is already listed.";
   } else {
     sellNote.textContent =
       "Listing moves the carrier NFT into escrow until it sells or you " +
@@ -474,13 +479,14 @@ async function refreshSellCandidates(): Promise<void> {
     return;
   }
   try {
-    // The reader attributes inscriptions from mint transactions only:
-    // it does not track transfers, so an inscription this wallet
-    // received (or sent on) by transfer may be missing (or still
-    // listed) here. The list transaction itself fails on-chain if the
-    // seller no longer holds the NFT.
-    ownedInscriptions = await lookupWallet(
-      readerConnection(),
+    // The lookup finds inscriptions the wallet currently owns (SPL
+    // token accounts with a positive balance), not inscriptions it
+    // minted: a bought NFT shows up here even though the mint
+    // transaction's holder is the seller. It does not depend on the
+    // memo scan window, so a mint that aged out still appears. See
+    // lookupOwnedInscriptions.
+    ownedInscriptions = await lookupOwnedInscriptions(
+      ownedLookupConnection(),
       GHOST_COLLECTION,
       publicKey.toBase58(),
       { cache: readerCache },

@@ -22,12 +22,17 @@ import {
   getCollectionState,
   getLeaderboard,
   getMintLimits,
+  lookupOwnedInscriptions,
   lookupWallet,
   ReaderError,
+  toOwnedLookupConnection,
   toReaderConnection,
+  type OwnedLookupConnection,
+  type ParsedTokenAccountConnection,
   type ParsedTransactionConnection,
   type ReaderConnection,
   type ReaderSignatureInfo,
+  type ReaderTokenAccount,
   type ReaderTransaction,
 } from "./reader.js";
 
@@ -1147,4 +1152,518 @@ describe("toReaderConnection", () => {
       expect(state.failedFetches).toBe(0);
     },
   );
+});
+
+// === Owned-inscription lookup ===
+
+/** The mint of the SPOOK (non-GHOST) fixture, from wrong-tick-memo.json. */
+const MINT_SPOOK = "GZh8uYcVHiLAZiwBtXTuRnZZxBDF48VB97FWtx3U4Vqp";
+/** The signature of the SPOOK (non-GHOST) fixture. */
+const SIG_SPOOK =
+  "4KW2YrtPcLbKagBE2rLXdRCyJh56jmp3tdnv7mToFmrtAqbKqiGYXRmizCcqfELYSY45Li7FoD4TNoDY53gn3BwW";
+
+/** Build a ReaderSignatureInfo for a successful mint transaction. */
+function mintSig(
+  signature: string,
+  slot: number,
+  blockTime: number | null,
+): ReaderSignatureInfo {
+  return { signature, slot, err: null, blockTime };
+}
+
+/**
+ * A fake {@link OwnedLookupConnection}, backed by recorded fixture
+ * transactions. Each wallet has its own set of token accounts; each
+ * mint has its own signature list; transactions are keyed by
+ * signature. The fake records every call so tests can assert which
+ * addresses were queried and which transactions were fetched.
+ */
+class FakeOwnedLookupConnection implements OwnedLookupConnection {
+  private readonly tokenAccountsByWallet = new Map<
+    string,
+    ReaderTokenAccount[]
+  >();
+  private readonly signaturesByMint = new Map<
+    string,
+    ReaderSignatureInfo[]
+  >();
+  private readonly transactions = new Map<string, ReaderTransaction>();
+  /** Wallets getTokenAccountsByOwner was called with. */
+  readonly queriedWallets: PublicKey[] = [];
+  /** Addresses getSignaturesForAddress was called with. */
+  readonly queriedAddresses: PublicKey[] = [];
+  /** Limits getSignaturesForAddress was called with. */
+  readonly queriedLimits: Array<number | undefined> = [];
+  /** Signatures getTransaction was called with. */
+  readonly fetchedSignatures: string[] = [];
+
+  setTokenAccounts(wallet: string, accounts: ReaderTokenAccount[]): void {
+    this.tokenAccountsByWallet.set(wallet, accounts);
+  }
+
+  setMintSignatures(mint: string, signatures: ReaderSignatureInfo[]): void {
+    this.signaturesByMint.set(mint, signatures);
+  }
+
+  setTransaction(signature: string, transaction: ReaderTransaction): void {
+    this.transactions.set(signature, transaction);
+  }
+
+  async getTokenAccountsByOwner(
+    wallet: PublicKey,
+  ): Promise<ReaderTokenAccount[]> {
+    this.queriedWallets.push(wallet);
+    return this.tokenAccountsByWallet.get(wallet.toBase58()) ?? [];
+  }
+
+  async getSignaturesForAddress(
+    address: PublicKey,
+    options?: { limit?: number },
+  ): Promise<ReaderSignatureInfo[]> {
+    this.queriedAddresses.push(address);
+    this.queriedLimits.push(options?.limit);
+    const sigs = this.signaturesByMint.get(address.toBase58()) ?? [];
+    const limit = options?.limit ?? sigs.length;
+    return sigs.slice(0, limit);
+  }
+
+  async getTransaction(
+    signature: string,
+  ): Promise<ReaderTransaction | null> {
+    this.fetchedSignatures.push(signature);
+    return this.transactions.get(signature) ?? null;
+  }
+}
+
+describe("lookupOwnedInscriptions", () => {
+  it("(a) an owned GHOST carrier appears", async () => {
+    const connection = new FakeOwnedLookupConnection();
+    const { signature, transaction } = loadFixture("mint-alice-1.json");
+    connection.setTokenAccounts(ALICE, [
+      { mint: MINT_ALICE_1, owner: ALICE, amount: "1" },
+    ]);
+    connection.setMintSignatures(MINT_ALICE_1, [
+      mintSig(signature, transaction.slot, transaction.blockTime ?? null),
+    ]);
+    connection.setTransaction(signature, transaction);
+
+    const found = await lookupOwnedInscriptions(
+      connection,
+      GHOST_COLLECTION,
+      ALICE,
+    );
+
+    expect(found).toEqual([
+      {
+        mint: MINT_ALICE_1,
+        tick: "GHOST",
+        signature: SIG_ALICE_1,
+        blockTime: 1795046400,
+        slot: 300000001,
+      },
+    ]);
+  });
+
+  it("(b) a bought inscription appears even though the mint holder is a different wallet", async () => {
+    // Carol bought MINT_ALICE_1 from Alice. Carol's token account
+    // shows the mint, but the mint transaction's holder is Alice.
+    // The lookup finds it because it checks ownership (the token
+    // account), not the mint-transaction holder. This is the buyer
+    // re-list regression test.
+    const connection = new FakeOwnedLookupConnection();
+    const { signature, transaction } = loadFixture("mint-alice-1.json");
+    connection.setTokenAccounts(CAROL, [
+      { mint: MINT_ALICE_1, owner: CAROL, amount: "1" },
+    ]);
+    connection.setMintSignatures(MINT_ALICE_1, [
+      mintSig(signature, transaction.slot, transaction.blockTime ?? null),
+    ]);
+    connection.setTransaction(signature, transaction);
+
+    const found = await lookupOwnedInscriptions(
+      connection,
+      GHOST_COLLECTION,
+      CAROL,
+    );
+
+    expect(found).toEqual([
+      {
+        mint: MINT_ALICE_1,
+        tick: "GHOST",
+        signature: SIG_ALICE_1,
+        blockTime: 1795046400,
+        slot: 300000001,
+      },
+    ]);
+  });
+
+  it("(c) a mint aged out of the scan window still appears (no Memo scan)", async () => {
+    // The lookup goes directly to token accounts — it never queries
+    // the Memo program — so a mint that aged out of the 20-signature
+    // memo window still appears. This is the sell-window regression
+    // test: the new function does not use the scan at all.
+    const connection = new FakeOwnedLookupConnection();
+    const { signature, transaction } = loadFixture("mint-alice-1.json");
+    connection.setTokenAccounts(ALICE, [
+      { mint: MINT_ALICE_1, owner: ALICE, amount: "1" },
+    ]);
+    connection.setMintSignatures(MINT_ALICE_1, [
+      mintSig(signature, transaction.slot, transaction.blockTime ?? null),
+    ]);
+    connection.setTransaction(signature, transaction);
+
+    const found = await lookupOwnedInscriptions(
+      connection,
+      GHOST_COLLECTION,
+      ALICE,
+    );
+
+    expect(found).toHaveLength(1);
+    // The Memo program was never queried: the lookup is independent
+    // of the scan window.
+    expect(
+      connection.queriedAddresses.some(
+        (addr) => addr.toBase58() === MEMO_PROGRAM_ID,
+      ),
+    ).toBe(false);
+  });
+
+  it("(d) non-GHOST, zero-balance, and unfetchable mints are skipped, never fatal", async () => {
+    const connection = new FakeOwnedLookupConnection();
+    const alice1 = loadFixture("mint-alice-1.json");
+    const spook = loadFixture("wrong-tick-memo.json");
+
+    connection.setTokenAccounts(ALICE, [
+      { mint: MINT_ALICE_1, owner: ALICE, amount: "1" }, // valid GHOST
+      { mint: MINT_SPOOK, owner: ALICE, amount: "1" }, // non-GHOST (SPOOK)
+      { mint: MINT_BOB_1, owner: ALICE, amount: "1" }, // pruned (no tx)
+      { mint: MINT_ALICE_2, owner: ALICE, amount: "0" }, // zero balance
+    ]);
+    connection.setMintSignatures(MINT_ALICE_1, [
+      mintSig(
+        alice1.signature,
+        alice1.transaction.slot,
+        alice1.transaction.blockTime ?? null,
+      ),
+    ]);
+    connection.setTransaction(alice1.signature, alice1.transaction);
+    connection.setMintSignatures(MINT_SPOOK, [
+      mintSig(
+        spook.signature,
+        spook.transaction.slot,
+        spook.transaction.blockTime ?? null,
+      ),
+    ]);
+    connection.setTransaction(spook.signature, spook.transaction);
+    connection.setMintSignatures(MINT_BOB_1, [
+      mintSig(SIG_BOB_1, 300000050, 1795047000),
+    ]);
+    // No transaction set for SIG_BOB_1 → pruned (null).
+
+    const found = await lookupOwnedInscriptions(
+      connection,
+      GHOST_COLLECTION,
+      ALICE,
+    );
+
+    // Only MINT_ALICE_1 (the valid GHOST) appears. The SPOOK mint is
+    // excluded (tick mismatch), the pruned mint is skipped, and the
+    // zero-balance mint was never queried.
+    expect(found).toEqual([
+      {
+        mint: MINT_ALICE_1,
+        tick: "GHOST",
+        signature: alice1.signature,
+        blockTime: 1795046400,
+        slot: 300000001,
+      },
+    ]);
+    // The zero-balance mint was filtered before any query.
+    expect(
+      connection.queriedAddresses.some(
+        (addr) => addr.toBase58() === MINT_ALICE_2,
+      ),
+    ).toBe(false);
+    // The pruned mint was queried (to list its signatures) but its
+    // transaction fetch returned null, so it was skipped.
+    expect(
+      connection.queriedAddresses.some(
+        (addr) => addr.toBase58() === MINT_BOB_1,
+      ),
+    ).toBe(true);
+  });
+
+  it("(e) the 20-mint cap is honored", async () => {
+    const connection = new FakeOwnedLookupConnection();
+    const { signature, transaction } = loadFixture("mint-alice-1.json");
+
+    // 25 token accounts, all with positive balance. Only the first
+    // mint has a valid mint transaction; the rest have no signatures.
+    const capMints = [
+      MINT_ALICE_1,
+      ...Array.from({ length: 24 }, (_, i) => {
+        const bytes = new Uint8Array(32);
+        bytes[0] = i + 2;
+        return new PublicKey(bytes).toBase58();
+      }),
+    ];
+    connection.setTokenAccounts(
+      ALICE,
+      capMints.map((mint) => ({ mint, owner: ALICE, amount: "1" })),
+    );
+    connection.setMintSignatures(MINT_ALICE_1, [
+      mintSig(signature, transaction.slot, transaction.blockTime ?? null),
+    ]);
+    connection.setTransaction(signature, transaction);
+
+    const found = await lookupOwnedInscriptions(
+      connection,
+      GHOST_COLLECTION,
+      ALICE,
+    );
+
+    // Only the first mint has a valid inscription.
+    expect(found).toHaveLength(1);
+    expect(found[0]?.mint).toBe(MINT_ALICE_1);
+    // Only 20 candidate mints were queried (the cap); the last 5
+    // were beyond the slice and never reached.
+    expect(connection.queriedAddresses).toHaveLength(20);
+  });
+
+  it("rejects a malformed wallet address", async () => {
+    const connection = new FakeOwnedLookupConnection();
+    await expect(
+      lookupOwnedInscriptions(connection, GHOST_COLLECTION, "not-an-address"),
+    ).rejects.toBeInstanceOf(ReaderError);
+    await expect(
+      lookupOwnedInscriptions(connection, GHOST_COLLECTION, "not-an-address"),
+    ).rejects.toMatchObject({
+      reason: "invalid-wallet",
+      message: expect.stringMatching(/wallet address/i),
+    });
+  });
+
+  it("uses the caller cache: a second lookup does not refetch the same mint transaction", async () => {
+    const connection = new FakeOwnedLookupConnection();
+    const { signature, transaction } = loadFixture("mint-alice-1.json");
+    connection.setTokenAccounts(ALICE, [
+      { mint: MINT_ALICE_1, owner: ALICE, amount: "1" },
+    ]);
+    connection.setMintSignatures(MINT_ALICE_1, [
+      mintSig(signature, transaction.slot, transaction.blockTime ?? null),
+    ]);
+    connection.setTransaction(signature, transaction);
+
+    const cache = new Map<string, ReaderTransaction | null>();
+
+    const first = await lookupOwnedInscriptions(
+      connection,
+      GHOST_COLLECTION,
+      ALICE,
+      { cache },
+    );
+    expect(first).toHaveLength(1);
+    expect(connection.fetchedSignatures).toEqual([SIG_ALICE_1]);
+
+    // A second lookup with the same cache: the mint transaction is
+    // cached, so it is not refetched.
+    const second = await lookupOwnedInscriptions(
+      connection,
+      GHOST_COLLECTION,
+      ALICE,
+      { cache },
+    );
+    expect(second).toEqual(first);
+    expect(connection.fetchedSignatures).toEqual([SIG_ALICE_1]);
+  });
+});
+
+/**
+ * A fake {@link ParsedTokenAccountConnection} for adapter tests. It
+ * wraps the raw web3.js-shaped interface so the adapter
+ * ({@link toOwnedLookupConnection}) can be tested, and records the
+ * config passed to {@link getParsedTransaction} so the
+ * versioned-transaction option can be verified.
+ */
+class FakeParsedTokenAccountConnection
+  implements ParsedTokenAccountConnection
+{
+  private readonly tokenAccounts = new Map<
+    string,
+    Array<{
+      account: {
+        data: {
+          parsed: {
+            info: {
+              mint: string;
+              owner: string;
+              tokenAmount: { amount: string };
+            };
+          };
+        };
+      };
+    }>
+  >();
+  private readonly signaturesByMint = new Map<
+    string,
+    ConfirmedSignatureInfo[]
+  >();
+  private readonly transactions = new Map<string, ReaderTransaction>();
+  readonly fetchedSignatures: string[] = [];
+  readonly fetchedConfigs: Array<
+    { maxSupportedTransactionVersion?: number } | undefined
+  > = [];
+
+  setTokenAccounts(wallet: string, accounts: ReaderTokenAccount[]): void {
+    this.tokenAccounts.set(
+      wallet,
+      accounts.map((account) => ({
+        account: {
+          data: {
+            parsed: {
+              info: {
+                mint: account.mint,
+                owner: account.owner,
+                tokenAmount: { amount: account.amount },
+              },
+            },
+          },
+        },
+      })),
+    );
+  }
+
+  setMintSignatures(mint: string, signatures: ReaderSignatureInfo[]): void {
+    this.signaturesByMint.set(
+      mint,
+      signatures.map((sig) => ({
+        signature: sig.signature,
+        slot: sig.slot,
+        err: (sig.err as ConfirmedSignatureInfo["err"]) ?? null,
+        memo: null,
+        blockTime: sig.blockTime ?? null,
+      })),
+    );
+  }
+
+  setTransaction(signature: string, transaction: ReaderTransaction): void {
+    this.transactions.set(signature, transaction);
+  }
+
+  async getParsedTokenAccountsByOwner(
+    owner: PublicKey,
+    _config: { programId: PublicKey },
+  ): Promise<{
+    context: { slot: number };
+    value: Array<{
+      account: {
+        data: {
+          parsed: {
+            info: {
+              mint: string;
+              owner: string;
+              tokenAmount: { amount: string };
+            };
+          };
+        };
+      };
+    }>;
+  }> {
+    return {
+      context: { slot: 0 },
+      value: this.tokenAccounts.get(owner.toBase58()) ?? [],
+    };
+  }
+
+  async getSignaturesForAddress(
+    address: PublicKey,
+    options?: { limit?: number },
+  ): Promise<ConfirmedSignatureInfo[]> {
+    const sigs = this.signaturesByMint.get(address.toBase58()) ?? [];
+    const limit = options?.limit ?? sigs.length;
+    return sigs.slice(0, limit);
+  }
+
+  async getParsedTransaction(
+    signature: string,
+    config?: { maxSupportedTransactionVersion?: number },
+  ): Promise<ParsedTransactionWithMeta | null> {
+    this.fetchedSignatures.push(signature);
+    this.fetchedConfigs.push(config);
+    const tx = this.transactions.get(signature);
+    // The fixture shape is the reader's subset of a parsed transaction;
+    // the adapter passes it through untouched, so the cast is safe.
+    return (tx ?? null) as unknown as ParsedTransactionWithMeta | null;
+  }
+}
+
+describe("toOwnedLookupConnection", () => {
+  it("(f) passes maxSupportedTransactionVersion: 1 to getParsedTransaction for the mint-transaction fetch", async () => {
+    const parsed = new FakeParsedTokenAccountConnection();
+    const { signature, transaction } = loadFixture("mint-alice-1.json");
+    parsed.setTokenAccounts(ALICE, [
+      { mint: MINT_ALICE_1, owner: ALICE, amount: "1" },
+    ]);
+    parsed.setMintSignatures(MINT_ALICE_1, [
+      mintSig(signature, transaction.slot, transaction.blockTime ?? null),
+    ]);
+    parsed.setTransaction(signature, transaction);
+
+    const connection = toOwnedLookupConnection(parsed);
+    const found = await lookupOwnedInscriptions(
+      connection,
+      GHOST_COLLECTION,
+      ALICE,
+    );
+
+    expect(found).toHaveLength(1);
+    // Without maxSupportedTransactionVersion the node rejects
+    // versioned transactions with JSON-RPC error -32015. The adapter
+    // reuses toReaderConnection, which bakes in this option.
+    expect(parsed.fetchedConfigs).toEqual([
+      { maxSupportedTransactionVersion: 1 },
+    ]);
+  });
+
+  it("unwraps token accounts to the minimal ReaderTokenAccount shape", async () => {
+    const parsed = new FakeParsedTokenAccountConnection();
+    parsed.setTokenAccounts(ALICE, [
+      { mint: MINT_ALICE_1, owner: ALICE, amount: "1" },
+      { mint: MINT_ALICE_2, owner: ALICE, amount: "0" },
+    ]);
+
+    const connection = toOwnedLookupConnection(parsed);
+    const accounts = await connection.getTokenAccountsByOwner(
+      new PublicKey(ALICE),
+    );
+
+    expect(accounts).toEqual([
+      { mint: MINT_ALICE_1, owner: ALICE, amount: "1" },
+      { mint: MINT_ALICE_2, owner: ALICE, amount: "0" },
+    ]);
+  });
+
+  it("queries the SPL Token program when listing token accounts", async () => {
+    const parsed = new FakeParsedTokenAccountConnection();
+    const queriedPrograms: string[] = [];
+    const original = parsed.getParsedTokenAccountsByOwner.bind(parsed);
+    parsed.getParsedTokenAccountsByOwner = async (
+      owner: PublicKey,
+      config: { programId: PublicKey },
+    ) => {
+      queriedPrograms.push(config.programId.toBase58());
+      return original(owner, config);
+    };
+    parsed.setTokenAccounts(ALICE, [
+      { mint: MINT_ALICE_1, owner: ALICE, amount: "1" },
+    ]);
+
+    const connection = toOwnedLookupConnection(parsed);
+    await connection.getTokenAccountsByOwner(new PublicKey(ALICE));
+
+    // The Token program ID, not the Memo program ID.
+    expect(queriedPrograms).toEqual([
+      "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+    ]);
+  });
 });

@@ -169,6 +169,103 @@ export interface ReaderConnection {
 }
 
 /**
+ * A token account the reader needs from a wallet's SPL token accounts:
+ * the mint, the owner, and the balance (uiTokenAmount.amount as a
+ * string). A balance of `"0"` means the account is empty.
+ */
+export interface ReaderTokenAccount {
+  /** The SPL token mint address of the account. */
+  mint: string;
+  /** The wallet that owns the token account. */
+  owner: string;
+  /** uiTokenAmount.amount as a string; `"0"` means the account is empty. */
+  amount: string;
+}
+
+/**
+ * The parsed-transaction connection (raw web3.js shape a real
+ * `Connection` satisfies) plus parsed token-account listing. A real
+ * web3.js `Connection` satisfies this interface, so the apps adapt
+ * theirs with {@link toOwnedLookupConnection}; tests inject a fake.
+ */
+export interface ParsedTokenAccountConnection
+  extends ParsedTransactionConnection {
+  getParsedTokenAccountsByOwner(
+    owner: PublicKey,
+    config: { programId: PublicKey },
+  ): Promise<{
+    context: { slot: number };
+    value: Array<{
+      account: {
+        data: {
+          parsed: {
+            info: {
+              mint: string;
+              owner: string;
+              tokenAmount: { amount: string };
+            };
+          };
+        };
+      };
+    }>;
+  }>;
+}
+
+/**
+ * The Connection-like interface the owned-inscription lookup reads
+ * through: the reader's minimal signature-listing and transaction-fetch
+ * shapes (from {@link ReaderConnection}) plus a token-account listing
+ * unwrapped to the minimal {@link ReaderTokenAccount} shape. Tests
+ * back it with a fake; the apps adapt a real `Connection` with
+ * {@link toOwnedLookupConnection}.
+ */
+export interface OwnedLookupConnection extends ReaderConnection {
+  /** List the wallet's SPL token accounts (mint, owner, balance). */
+  getTokenAccountsByOwner(wallet: PublicKey): Promise<ReaderTokenAccount[]>;
+}
+
+/** The SPL Token program ID (same on every network). */
+const TOKEN_PROGRAM_ID = new PublicKey(
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+);
+
+/**
+ * Adapt a web3.js `Connection` (or any
+ * {@link ParsedTokenAccountConnection}) to the
+ * {@link OwnedLookupConnection} the owned-inscription lookup takes.
+ * Signature listing and transaction fetching reuse
+ * {@link toReaderConnection} (which asks for versioned transactions —
+ * see the comment there); token accounts are unwrapped to the minimal
+ * {@link ReaderTokenAccount} shape, dropping the account pubkey and
+ * other fields the lookup does not read.
+ */
+export function toOwnedLookupConnection(
+  connection: ParsedTokenAccountConnection,
+): OwnedLookupConnection {
+  const base = toReaderConnection(connection);
+  return {
+    getSignaturesForAddress: base.getSignaturesForAddress,
+    getTransaction: base.getTransaction,
+    async getTokenAccountsByOwner(
+      wallet: PublicKey,
+    ): Promise<ReaderTokenAccount[]> {
+      const result = await connection.getParsedTokenAccountsByOwner(
+        wallet,
+        { programId: TOKEN_PROGRAM_ID },
+      );
+      return result.value.map((entry) => {
+        const info = entry.account.data.parsed.info;
+        return {
+          mint: info.mint,
+          owner: info.owner,
+          amount: info.tokenAmount.amount,
+        };
+      });
+    },
+  };
+}
+
+/**
  * Default number of transactions scanned per read (RPC returns newest
  * first). Kept small on purpose: a cold scan fetches one transaction
  * per signature, and the public devnet RPC allows roughly 40 requests
@@ -201,6 +298,27 @@ export const DEFAULT_LEADERBOARD_LIMIT = 10;
 
 /** Default number of events returned by {@link getActivity}. */
 export const DEFAULT_ACTIVITY_LIMIT = 20;
+
+/**
+ * Default maximum candidate mints the owned-inscription lookup checks.
+ * Each candidate mint needs a signature listing and a transaction
+ * fetch, so the cap keeps the lookup bounded against a wallet that
+ * holds many NFTs. A wallet with more than this many token accounts
+ * has only the first 20 checked; the rest are skipped. See
+ * {@link lookupOwnedInscriptions}.
+ */
+export const DEFAULT_OWNED_LOOKUP_MINT_CAP = 20;
+
+/**
+ * Default number of signatures fetched per candidate mint to find its
+ * mint transaction. The mint transaction is the OLDEST one (the first
+ * transaction that involved the mint), so the lookup fetches up to
+ * this many signatures (newest first) and takes the last. A heavily
+ * traded NFT with more than this many transactions is skipped: its
+ * mint transaction is beyond the fetch, so the lookup cannot confirm
+ * it as a GHOST inscription. See {@link lookupOwnedInscriptions}.
+ */
+export const DEFAULT_MINT_SIGNATURE_FETCH = 10;
 
 /** Options shared by every reader function. */
 export interface ReaderOptions {
@@ -255,6 +373,20 @@ export interface LeaderboardOptions extends ReaderOptions {
 export interface ActivityOptions extends ReaderOptions {
   /** Maximum events to return. Defaults to {@link DEFAULT_ACTIVITY_LIMIT}. */
   limit?: number;
+}
+
+/** Options for {@link lookupOwnedInscriptions}. */
+export interface OwnedLookupOptions extends ReaderOptions {
+  /**
+   * Maximum candidate mints to check (token accounts with a positive
+   * balance). Defaults to {@link DEFAULT_OWNED_LOOKUP_MINT_CAP}.
+   */
+  mintCap?: number;
+  /**
+   * Signatures fetched per mint to find the mint transaction (the
+   * oldest). Defaults to {@link DEFAULT_MINT_SIGNATURE_FETCH}.
+   */
+  mintSignatureLimit?: number;
 }
 
 /** The live state of a collection, counted from on-chain records. */
@@ -977,6 +1109,133 @@ export async function lookupWallet(
       slot: entry.slot,
     }))
     .sort(byNewestFirst);
+}
+
+/**
+ * List the GHOST inscriptions a wallet currently OWNS, newest first.
+ * Unlike {@link lookupWallet} (which attributes inscriptions from mint
+ * transactions inside a Memo scan), this finds inscriptions by
+ * ownership: it lists the wallet's SPL token accounts with a positive
+ * balance, then for each candidate mint finds its mint transaction
+ * (the oldest signature) and verifies the inscription there.
+ *
+ * This fixes two proven consequences of the scan-window limit: a judge
+ * who mints and then lists sees their mint almost immediately age out
+ * of the 20-transaction Memo window, and a buyer can never re-list a
+ * bought NFT because the mint transaction's holder is the seller.
+ * Ownership is independent of the scan window and of who minted.
+ *
+ * Caps and limits (documented as design facts):
+ * - At most {@link DEFAULT_OWNED_LOOKUP_MINT_CAP} candidate mints are
+ *   checked (the first 20 token accounts with a positive balance).
+ * - At most {@link DEFAULT_MINT_SIGNATURE_FETCH} signatures are
+ *   fetched per mint to find the mint transaction; a mint with more
+ *   than that many transactions is skipped (its mint transaction is
+ *   too old to reach).
+ * - A mint whose mint transaction cannot be fetched (pruned, null) is
+ *   skipped, never fatal.
+ * - The Memo program is never scanned: the lookup goes directly to
+ *   token accounts, so a mint that aged out of the window still
+ *   appears.
+ *
+ * Throws a {@link ReaderError} (`invalid-wallet`) for a malformed
+ * wallet address.
+ */
+export async function lookupOwnedInscriptions(
+  connection: OwnedLookupConnection,
+  config: CollectionConfig,
+  wallet: string,
+  options?: OwnedLookupOptions,
+): Promise<WalletInscription[]> {
+  const normalized = normalizeWallet(wallet);
+  const cache = options?.cache;
+  const mintCap = options?.mintCap ?? DEFAULT_OWNED_LOOKUP_MINT_CAP;
+  const mintSignatureLimit =
+    options?.mintSignatureLimit ?? DEFAULT_MINT_SIGNATURE_FETCH;
+
+  // Step 1: list the wallet's SPL token accounts, keep the ones with a
+  // positive balance. These are the candidate mints the wallet
+  // currently owns.
+  const accounts = await connection.getTokenAccountsByOwner(
+    new PublicKey(normalized),
+  );
+  const candidates = accounts
+    .filter((account) => account.amount !== "0")
+    .slice(0, mintCap);
+
+  // Step 2: for each candidate mint, find its mint transaction (the
+  // oldest signature) and verify the GHOST inscription there.
+  const found: WalletInscription[] = [];
+  for (const account of candidates) {
+    // List signatures for the mint, newest first; the mint
+    // transaction is the OLDEST one — the last in the list.
+    const signatures = await connection.getSignaturesForAddress(
+      new PublicKey(account.mint),
+      { limit: mintSignatureLimit },
+    );
+    if (signatures.length === 0) {
+      continue;
+    }
+    const mintSig = signatures[signatures.length - 1];
+    if (mintSig === undefined) {
+      continue;
+    }
+    // A failed transaction never minted anything; skip it.
+    if (mintSig.err !== null && mintSig.err !== undefined) {
+      continue;
+    }
+    // Fetch the mint transaction. Use the cache so a refresh does
+    // not refetch the same mint transaction.
+    let transaction: ReaderTransaction | null;
+    const cached = cache?.get(mintSig.signature);
+    if (cached !== undefined) {
+      transaction = cached;
+    } else {
+      transaction = await connection.getTransaction(mintSig.signature);
+      cache?.set(mintSig.signature, transaction);
+    }
+    // A pruned mint transaction is skipped, never fatal.
+    if (transaction === null || transaction.meta === null) {
+      continue;
+    }
+    if (transaction.meta.err !== null && transaction.meta.err !== undefined) {
+      continue;
+    }
+    // Extract the memo and verify it as a GHOST inscription for
+    // this candidate mint. A non-GHOST memo (wrong tick) or a memo
+    // whose binding does not verify is skipped silently.
+    const memos = extractMemos(transaction.meta.logMessages ?? []);
+    for (const memo of memos) {
+      if (memo === null) {
+        continue;
+      }
+      const parsed = parseInscription(memo);
+      if (!parsed.ok) {
+        continue;
+      }
+      if (!verifyInscription(parsed.inscription, config.tick).ok) {
+        continue;
+      }
+      // The inscription's mint field must name this candidate mint.
+      if (parsed.inscription.mint !== account.mint) {
+        continue;
+      }
+      const entry = verifyBinding(parsed.inscription, transaction.meta);
+      if (entry === null) {
+        continue;
+      }
+      found.push({
+        mint: parsed.inscription.mint,
+        tick: config.tick,
+        signature: mintSig.signature,
+        blockTime: transaction.blockTime ?? null,
+        slot: transaction.slot,
+      });
+      break;
+    }
+  }
+
+  return found.sort(byNewestFirst);
 }
 
 /**
