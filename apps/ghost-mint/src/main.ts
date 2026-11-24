@@ -127,6 +127,7 @@ const lookupButton = element<HTMLButtonElement>("lookup-button");
 const lookupResult = element<HTMLElement>("lookup-result");
 const mintAllowance = element<HTMLElement>("mint-allowance");
 const mintButton = element<HTMLButtonElement>("mint-button");
+const mintConnectHint = element<HTMLElement>("mint-connect-hint");
 const mintPreview = element<HTMLElement>("mint-preview");
 const mintConfirmButton =
   element<HTMLButtonElement>("mint-confirm-button");
@@ -271,8 +272,14 @@ async function refreshAllowance(): Promise<void> {
   if (publicKey === null) {
     mintAllowance.textContent = mintAllowanceText(null);
     mintButton.disabled = true;
+    // Say plainly why the button is greyed out, next to the button.
+    mintConnectHint.textContent = "Connect your wallet to mint.";
     return;
   }
+  // Connected: the button's precondition is met, so the hint goes away
+  // (a disabled button from here on is a limits refusal, explained in
+  // the allowance line instead).
+  mintConnectHint.textContent = "";
   try {
     const limits: MintLimits = await getMintLimits(
       readerConnection(),
@@ -291,7 +298,7 @@ async function refreshAllowance(): Promise<void> {
 function updateWalletButton(): void {
   const publicKey = adapter.publicKey;
   if (publicKey === null) {
-    walletButton.textContent = "Connect wallet";
+    walletButton.textContent = "Connect Phantom or Solflare";
     return;
   }
   const name = adapter.walletName ?? "Wallet";
@@ -400,7 +407,7 @@ async function onLookup(): Promise<void> {
 async function onMint(): Promise<void> {
   const publicKey = adapter.publicKey;
   if (publicKey === null) {
-    mintStatus.textContent = "Connect a wallet before minting.";
+    mintStatus.textContent = "Connect Phantom or Solflare before minting.";
     return;
   }
   mintStatus.textContent = "Building your mint transaction…";

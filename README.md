@@ -18,6 +18,13 @@ The demo collection is **GHOST** ("Spooky Ghosts"): supply 4,444,
 Both demo apps and the CLI default to **devnet**, so anyone can try the
 whole flow for free. A network switch moves each app to mainnet.
 
+| | |
+|---|---|
+| Ghost Mint (demo) | https://skelsol-ghost-mint.vercel.app |
+| Inscription Market (demo) | https://skelsol-market.vercel.app |
+| Demo video (1:53) | https://youtu.be/HBE63hOJhyI |
+| Devpost submission | https://devpost.com/software/skelsol |
+
 > **Status, stated plainly (19 November 2026):**
 >
 > - **Minting works on devnet today.** It needs no custom program — it
@@ -181,8 +188,9 @@ skel cancel <mint> --keypair ./agent-keypair.json
 Every write shows a transaction preview first and sends only after you
 type `yes` for that exact action. There is no `--yes` flag. `--json`
 prints machine-readable output on stdout (previews stay on stderr).
-Market commands (`list`, `buy`, `cancel`) refuse with a clear message
-until the escrow program is deployed — see the status note at the top.
+Market commands (`list`, `buy`, `cancel`) work on devnet and refuse
+with a clear message on mainnet, where the escrow program is not
+deployed — see the status note at the top.
 
 Make an agent wallet with the Solana CLI and fund it free from the web
 faucet (https://faucet.solana.com). Never commit a keypair file; never
@@ -197,7 +205,7 @@ Everything below is free on devnet. You need a Solana wallet
    wallet address, request up to 5 SOL (max 2 requests per 8 hours).
    The CLI airdrop against the public RPC is closed, so use the web
    faucet.
-2. **Mint.** Open Ghost Mint, connect your wallet, mint one GHOST
+2. **Mint.** Open [Ghost Mint](https://skelsol-ghost-mint.vercel.app), connect your wallet, mint one GHOST
    inscription. The app shows the exact cost before you confirm, then
    gives you an explorer link to the transaction — open it and find
    the inscription JSON in the transaction logs. Priced collections
@@ -210,11 +218,11 @@ Everything below is free on devnet. You need a Solana wallet
 3. **Look up.** Paste any wallet address into the lookup to see its
    GHOST inscriptions; check the leaderboard and the live activity
    feed.
-4. **Trade (once the market program is deployed).** Open the Market,
+4. **Trade.** Open [the Market](https://skelsol-market.vercel.app),
    list a carrier NFT you own at a fixed price, buy a listing from a
    second wallet, cancel a listing and confirm the NFT returns.
-   Until the deploy lands, the market pages and `skel list` / `buy` /
-   `cancel` say so plainly and refuse.
+   A listing is already live at 0.1 SOL (proven 20 Nov 2026), so the
+   buy flow can be tried right away with a second wallet.
 5. **Try the CLI.** `skel status` and `skel lookup <wallet>` need no
    wallet; `skel mint` needs a funded devnet keypair (see
    [Run the CLI](#run-the-cli) and `agent.md`).
@@ -409,9 +417,10 @@ of the project, not footnotes.
   repo ships one shared metadata file (see
   [Carrier NFT assets](#carrier-nft-assets-ghost)). Serving it for
   every per-mint URI needs a host rewrite rule, or a template change
-  to a single shared URI. Until the config points at hosted assets,
-  minted NFTs carry the `example.com` placeholder URIs and show no
-  image.
+  to a single shared URI. The config points at hosted assets (since
+  19 Nov 2026), so minted NFTs carry real image URIs; the remaining
+  work is moving the art and metadata from Vercel static hosting to
+  durable storage (Arweave/IPFS).
 - **Devnet can reset.** Programs, listings, and mints can disappear
   without notice. `docs/DEPLOY.md` has the redeploy and re-seed steps.
 
@@ -421,11 +430,12 @@ of the project, not footnotes.
 - `docs/SPEC.md` — the spec: problem, solution, user stories, decisions.
 - `docs/research-solana-inscriptions.md` — primary-source research
   (LibrePlex, Memo, Metaplex, Anchor escrow, devnet) behind the design.
-- `docs/adr/` — architecture decision records (0001–0010).
+- `docs/adr/` — architecture decision records (0001–0015).
 - `docs/DEPLOY.md` — escrow program deploy status, funding, script,
   verification, devnet reset notes.
 - `docs/SUBMISSION.md` — the Devpost submission draft with judge
   instructions.
+- `docs/TRACEABILITY.md` — requirement → task → module → test map.
 - `agent.md` — the AI-agent manual for the `skel` CLI.
 - `.kiro/specs/skelsol/` — the Kiro spec: `requirements.md`,
   `design.md`, `tasks.md`.

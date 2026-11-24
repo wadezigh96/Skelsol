@@ -95,7 +95,7 @@ describe("statsViewModel", () => {
 describe("mintAllowanceText", () => {
   it("asks to connect when no wallet is connected", () => {
     expect(mintAllowanceText(null)).toBe(
-      "Connect a wallet to see your allowance.",
+      "Connect Phantom or Solflare to see your allowance.",
     );
   });
 

@@ -19,7 +19,7 @@ import { formatLamports, shortenAddress } from "@skelsol/template";
  */
 export function mintAllowanceText(limits: MintLimits | null): string {
   if (limits === null) {
-    return "Connect a wallet to see your allowance.";
+    return "Connect Phantom or Solflare to see your allowance.";
   }
   if (!limits.canMint) {
     return limits.reason ?? "You cannot mint right now.";

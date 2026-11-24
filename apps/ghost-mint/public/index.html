@@ -44,7 +44,7 @@
         </button>
       </div>
       <button id="wallet-button" class="skel-btn skel-btn-ghost" type="button">
-        Connect wallet
+        Connect Phantom or Solflare
       </button>
       <button
         id="sound-button"
@@ -165,6 +165,11 @@
           </button>
           <span id="stats-status" class="skel-note" role="status"></span>
         </p>
+        <p class="skel-note">
+          Stats cover the recent live window: a mint ages out of it
+          after about a minute, but stays visible through the
+          collection registry.
+        </p>
       </section>
 
       <section class="skel-section" aria-labelledby="lookup-heading">
@@ -198,12 +203,15 @@
           <h2 id="mint-heading" class="skel-section-label">/Mint</h2>
         </div>
         <p id="mint-allowance" class="skel-note">
-          Connect a wallet to see your allowance.
+          Connect Phantom or Solflare to see your allowance.
         </p>
         <div class="skel-form-row">
           <button id="mint-button" class="skel-btn" type="button" disabled>
             Mint a ghost
           </button>
+          <span id="mint-connect-hint" class="skel-note" role="status">
+            Connect your wallet to mint.
+          </span>
         </div>
         <div id="mint-preview" class="skel-status" hidden></div>
         <div class="skel-form-row">
@@ -217,6 +225,10 @@
           </button>
         </div>
         <div id="mint-status" class="skel-status" role="status"></div>
+        <p class="skel-note">
+          Need devnet SOL? Get free SOL at
+          <a href="https://faucet.solana.com">faucet.solana.com</a>.
+        </p>
       </section>
 
       <section class="skel-section" aria-labelledby="leaderboard-heading">

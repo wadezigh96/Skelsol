@@ -388,7 +388,7 @@ export function getEscrowProgramId(network: Network): string {
   if (escrowProgramId === null) {
     throw new ConfigError(
       `Invalid network config: the escrow program is not deployed on ` +
-        `${network} yet (ticket 07). Market actions are unavailable until it is.`,
+        `${network} yet. Market actions are unavailable until it is.`,
     );
   }
   return escrowProgramId;

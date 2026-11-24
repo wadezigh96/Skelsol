@@ -105,7 +105,7 @@ flow for free; a network switch moves each app to mainnet.
   NFT-for-SOL sale with a 1% fee. Its TypeScript client builds the
   `list` / `buy` / `cancel` instructions by hand from the committed
   IDL, because there is no Anchor 1.x TypeScript client on npm (ADR
-  0010). The program is tested with 8 in-process LiteSVM tests, all
+  0010). The program is tested with 11 in-process LiteSVM tests, all
   passing.
 - **Wallet Standard** for browser wallet connection (Phantom,
   Solflare), with legacy/v0 transactions so Ledger signing keeps
@@ -118,7 +118,7 @@ flow for free; a network switch moves each app to mainnet.
   its limits honestly instead of claiming to implement LibrePlex
   SPL-20.
 - **Spec-driven, in Kiro.** Requirements, design, and tasks live in
-  `.kiro/specs/skelsol/`; decisions live in `docs/adr/` (10 ADRs).
+  `.kiro/specs/skelsol/`; decisions live in `docs/adr/` (15 ADRs).
 
 ### Challenges
 
@@ -150,9 +150,11 @@ flow for free; a network switch moves each app to mainnet.
 
 ### What's next
 
-- **Host real collection art** (the config currently points at a
-  placeholder image URL) and the off-chain metadata JSON on durable
-  storage (Arweave/IPFS).
+- **Move the collection art and the off-chain metadata JSON to
+  durable storage (Arweave/IPFS).** The art itself is already real
+  and hosted (the config points at the Ghost Mint site's hosted
+  assets since 19 Nov 2026); only the storage is still Vercel static
+  hosting, not durable storage.
 - **A real-browser test pass** with Phantom and Solflare: the wallet
   handshake is the only part of the demo flow not yet exercised in
   a real browser (the mint and listing are proven on devnet, the
@@ -276,7 +278,8 @@ node dist/cli.js mint --keypair ./agent-keypair.json
 
 Every write shows a transaction preview first and sends only after
 you type `yes` for that exact action. Market commands (`list`, `buy`,
-`cancel`) refuse with a clear message until the program deploys. The
+`cancel`) work on devnet and refuse with a clear message on mainnet,
+where the program is not deployed. The
 full agent manual is `agent.md` at the repo root.
 
 ### 6. Run the tests (optional)
@@ -284,7 +287,7 @@ full agent manual is `agent.md` at the repo root.
 ```sh
 npm test             # full unit suite (vitest, offline)
 npm run typecheck    # TypeScript across the workspace
-anchor test          # escrow program tests (8 tests, LiteSVM, in-process)
+anchor test          # escrow program tests (11 tests, LiteSVM, in-process)
 ```
 
 No test touches mainnet or real funds.

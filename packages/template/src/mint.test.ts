@@ -51,7 +51,7 @@ function fakeConnection(rentPerByte = 1000): MintConnection & {
   };
 }
 
-/** A stub limits checker: the reader is not built yet, so tests stand in for it. */
+/** A stub limits checker: tests stand in for the reader so the mint client is tested in isolation. */
 function stubLimits(overrides: Partial<MintLimits> = {}): MintLimitsChecker {
   return {
     async checkMintLimits(): Promise<MintLimits> {

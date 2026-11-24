@@ -33,17 +33,18 @@ Be honest about the current status; do not claim more than this:
 
 - **Mint works on devnet.** Minting needs no custom program (it uses
   the Memo program and Metaplex Token Metadata), so `skel mint` works
-  today on devnet.
-- **The market program is NOT deployed yet.** The escrow program
-  (`skelsol-market`) is built and tested, but the devnet deploy is
-  waiting on funding for the deploy wallet (see `docs/DEPLOY.md`).
-  Until it deploys:
-  - `skel status` works, but the floor price reads "unavailable: the
-    market program is not deployed on devnet yet".
-  - `skel list`, `skel buy`, and `skel cancel` refuse with that same
-    clear message. They never fake a result and never crash.
-- **Mainnet:** the market program is not deployed on mainnet either,
-  and mainnet is real money. Default to devnet.
+  today on devnet. The first live mint was proven 20 Nov 2026 (see
+  `docs/SUBMISSION.md`): Minted 1 of 4,444.
+- **The market program is deployed on devnet** (19 Nov 2026).
+  The escrow program (`skelsol-market`) is live at program ID
+  `3XMFqwbEND9gYWoTahNQPhVoNspHet1PfdizsRymqwNo`
+  ([explorer](https://explorer.solana.com/address/3XMFqwbEND9gYWoTahNQPhVoNspHet1PfdizsRymqwNo?cluster=devnet)).
+  `skel status` reports the floor price (0.1 SOL at the 20 Nov 2026
+  live check) and `marketStatus` `live`; `skel list`, `skel buy`, and
+  `skel cancel` work on devnet.
+- **Mainnet:** the market program is not deployed on mainnet, and
+  mainnet is real money. Market commands refuse on mainnet with a
+  clear message. Default to devnet.
 - **Public RPC rate limits:** the devnet reader scans recent Memo
   transactions through the public RPC, which rate-limits heavy reads
   (HTTP 429). If a read fails with "Could not reach the network, try
@@ -142,7 +143,7 @@ escrow until it is bought or the listing is cancelled.
 skel list <mint> 1000000000 --keypair ./agent-keypair.json
 ```
 
-Refuses while the market program is not deployed (see section 2).
+Refuses on mainnet, where the market program is not deployed (see section 2).
 
 ### `skel buy <seller> <mint>` (write)
 
@@ -156,7 +157,7 @@ charged is always the price stored in the listing, never client input:
 skel buy <seller> <mint> --keypair ./agent-keypair.json
 ```
 
-Refuses while the market program is not deployed (see section 2).
+Refuses on mainnet, where the market program is not deployed (see section 2).
 
 ### `skel cancel <mint>` (write)
 
@@ -167,7 +168,7 @@ NFT returns to your wallet and the listing closes.
 skel cancel <mint> --keypair ./agent-keypair.json
 ```
 
-Refuses while the market program is not deployed (see section 2).
+Refuses on mainnet, where the market program is not deployed (see section 2).
 
 ## 5. Safety rules (the preview-before-send rule)
 
@@ -207,8 +208,13 @@ can explain them to its user. They are not optional.
   parses cleanly. The preview still goes to stderr. Example:
 
 ```json
-{"command":"status","network":"devnet","tick":"GHOST","supply":4444,"minted":0,"remaining":4444,"holders":0,"floorPriceLamports":null,"floorPrice":null,"marketStatus":"not-deployed","marketMessage":"The market program is not deployed on devnet yet. ..."}
+{"command":"status","network":"devnet","tick":"GHOST","supply":4444,"minted":1,"remaining":4443,"holders":1,"floorPriceLamports":"100000000","floorPrice":"0.1 SOL","marketStatus":"live","marketMessage":null}
 ```
+
+(The numbers above are the live state at the 20 Nov 2026 check: one
+mint, one listing at 0.1 SOL. On mainnet the market fields read
+`"marketStatus":"not-deployed"` with a plain-words
+`marketMessage`, because the program is not deployed there.)
 
 - **Prices are strings in JSON** (`"priceLamports": "1000000000"`)
   because lamport amounts can exceed what a JSON number holds exactly.
@@ -236,15 +242,15 @@ can explain them to its user. They are not optional.
 | | |
 |---|---|
 | Escrow (market) program ID (devnet) | `3XMFqwbEND9gYWoTahNQPhVoNspHet1PfdizsRymqwNo` |
-| Escrow program explorer (after deploy) | https://explorer.solana.com/address/3XMFqwbEND9gYWoTahNQPhVoNspHet1PfdizsRymqwNo?cluster=devnet |
+| Escrow program explorer | https://explorer.solana.com/address/3XMFqwbEND9gYWoTahNQPhVoNspHet1PfdizsRymqwNo?cluster=devnet |
 | Treasury (1% fee recipient; placeholder, the devnet deployer's wallet) | `7T1fjFsHvo3Q7EpwN5RzgNk8HARdxKnC3tgkavAbBQX7` |
 | Memo program (same on every network) | `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr` |
 | Metaplex Token Metadata (same on every network) | `metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s` |
 
-The market program ID is final (its keypair is stable), but the
-program is not deployed yet: the explorer link shows nothing until the
-deploy lands. See `docs/DEPLOY.md` for the deploy status, the funding
-blocker, and how to verify a deploy.
+The market program ID is final (its keypair is stable) and the
+program is deployed on devnet (19 Nov 2026): the explorer link shows
+the live program. See `docs/DEPLOY.md` for the deploy status, the
+re-deploy funding notes, and how to verify a deploy.
 
 ## 9. Worked examples
 
@@ -253,13 +259,15 @@ blocker, and how to verify a deploy.
 ```sh
 $ skel status
 GHOST (Spooky Ghosts) on devnet
-Minted: 0 of 4444 (4444 remaining)
-Minters: 0
-Floor price: unavailable: The market program is not deployed on devnet yet. ...
+Minted: 1 of 4444 (4443 remaining)
+Minters: 1
+Floor price: 0.1 SOL
 
 $ skel lookup <wallet>
-Wallet <wallet>: 0 GHOST inscriptions
+Wallet <wallet>: 1 GHOST inscription
 ```
+
+(The numbers above are the live state at the 20 Nov 2026 check.)
 
 ### Mint one inscription
 
@@ -315,8 +323,9 @@ Send this cancel transaction? Type yes to confirm: yes
 Cancelled! The carrier NFT is back in your wallet.
 ```
 
-(These two commands refuse with "the market program is not deployed
-on devnet yet" until the deploy lands; see section 2.)
+(These two commands refuse on mainnet with "the market program is
+not deployed on mainnet yet", because the program is deployed on
+devnet only; see section 2.)
 
 ### Buy a listing
 

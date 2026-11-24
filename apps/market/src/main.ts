@@ -405,7 +405,7 @@ function renderBuySection(): void {
   buyConfirmButton.hidden = false;
   buyConfirmButton.disabled = adapter.publicKey === null;
   if (adapter.publicKey === null) {
-    buyStatus.textContent = "Connect a wallet to buy this listing.";
+    buyStatus.textContent = "Connect Phantom or Solflare to buy this listing.";
   }
 }
 
@@ -442,7 +442,7 @@ function renderSellForm(): void {
   } else if (ownedLoadError !== null) {
     sellNote.textContent = ownedLoadError;
   } else if (wallet === null) {
-    sellNote.textContent = "Connect a wallet to list one of your carrier NFTs.";
+    sellNote.textContent = "Connect Phantom or Solflare to list one of your carrier NFTs.";
   } else if (ownedInscriptions.length === 0) {
     sellNote.textContent =
       "This wallet has minted no GHOST inscriptions yet. Mint one in " +
@@ -488,7 +488,7 @@ async function refreshSellCandidates(): Promise<void> {
 function updateWalletButton(): void {
   const publicKey = adapter.publicKey;
   if (publicKey === null) {
-    walletButton.textContent = "Connect wallet";
+    walletButton.textContent = "Connect Phantom or Solflare";
     return;
   }
   const name = adapter.walletName ?? "Wallet";
@@ -618,7 +618,7 @@ async function onConfirmBuy(): Promise<void> {
 function onSell(): void {
   const seller = adapter.publicKey;
   if (seller === null) {
-    sellStatus.textContent = "Connect a wallet before listing.";
+    sellStatus.textContent = "Connect Phantom or Solflare before listing.";
     return;
   }
   const mint = sellSelect.value;

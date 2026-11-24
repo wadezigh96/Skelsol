@@ -35,3 +35,6 @@ keypair.json
 # Editor
 .vscode/
 .idea/
+
+# Internal scratch notes (planning drafts; not part of the submission)
+.scratch/
