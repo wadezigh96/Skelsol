@@ -28,6 +28,24 @@ export function mintAllowanceText(limits: MintLimits | null): string {
   return `You minted ${limits.mintedByWallet} of ${limits.perWalletLimit} · ${left} left.`;
 }
 
+/**
+ * The warning banner shown while the app is on mainnet: real money,
+ * and the demo collection lives on devnet. Shown by
+ * `updateNetworkGuard` in `main.ts`.
+ */
+export function mainnetWarningText(): string {
+  return (
+    "You are on mainnet: transactions here use real SOL. " +
+    "This demo collection (GHOST) lives on devnet — minting is " +
+    "disabled here. Switch back to devnet to try the demo for free."
+  );
+}
+
+/** The mint section's allowance line while the app is on mainnet. */
+export function mainnetMintDisabledText(): string {
+  return "Minting is disabled on mainnet. Switch back to devnet to mint.";
+}
+
 /** The mint cost breakdown, as display strings. */
 export interface CostLines {
   rent: string;

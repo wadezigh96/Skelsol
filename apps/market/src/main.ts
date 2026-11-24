@@ -30,6 +30,8 @@ import {
 import {
   emptyListingsText,
   listingRow,
+  mainnetTradingDisabledText,
+  mainnetWarningText,
   marketUnavailableText,
   parseSolPrice,
   salePreview,
@@ -127,6 +129,7 @@ const walletPicker = element<HTMLElement>("wallet-picker");
 const walletPickerList = element<HTMLElement>("wallet-picker-list");
 const devnetButton = element<HTMLButtonElement>("network-devnet");
 const mainnetButton = element<HTMLButtonElement>("network-mainnet");
+const networkWarning = element<HTMLElement>("network-warning");
 const refreshButton = element<HTMLButtonElement>("refresh-button");
 const statsStatus = element<HTMLElement>("stats-status");
 const statMinted = element<HTMLElement>("stat-minted");
@@ -336,6 +339,7 @@ function renderListings(): void {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "skel-btn skel-btn-ghost";
+    button.disabled = network === "mainnet";
     if (row.isOwn) {
       button.textContent = "Cancel";
       button.addEventListener("click", () => {
@@ -403,7 +407,8 @@ function renderBuySection(): void {
   buyPreview.append(heading, costs, note);
   buyPreview.hidden = false;
   buyConfirmButton.hidden = false;
-  buyConfirmButton.disabled = adapter.publicKey === null;
+  buyConfirmButton.disabled =
+    adapter.publicKey === null || network === "mainnet";
   if (adapter.publicKey === null) {
     buyStatus.textContent = "Connect Phantom or Solflare to buy this listing.";
   }
@@ -429,13 +434,16 @@ function renderSellForm(): void {
     sellSelect.appendChild(option);
   }
   const canList =
+    network !== "mainnet" &&
     marketAvailability === "deployed" &&
     wallet !== null &&
     candidates.length > 0;
   sellSelect.disabled = !canList;
   sellPriceInput.disabled = !canList;
   sellButton.disabled = !canList;
-  if (marketAvailability === "unknown") {
+  if (network === "mainnet") {
+    sellNote.textContent = mainnetTradingDisabledText();
+  } else if (marketAvailability === "unknown") {
     sellNote.textContent = marketLoadError ?? "";
   } else if (marketAvailability === "not-deployed") {
     sellNote.textContent = marketUnavailableText(network);
@@ -565,6 +573,9 @@ async function onWalletButton(): Promise<void> {
 
 /** Step 1 of the buy flow: pick a listing, see the exact total. */
 function onSelectBuy(listing: Listing): void {
+  if (network === "mainnet") {
+    return;
+  }
   selectedListing = listing;
   buyStatus.textContent = "";
   renderBuySection();
@@ -572,6 +583,9 @@ function onSelectBuy(listing: Listing): void {
 
 /** Step 2 of the buy flow: re-read, sign in the wallet, send. */
 async function onConfirmBuy(): Promise<void> {
+  if (network === "mainnet") {
+    return;
+  }
   const listing = selectedListing;
   const buyer = adapter.publicKey;
   if (listing === null || buyer === null) {
@@ -655,6 +669,9 @@ function onSell(): void {
 
 /** Step 2 of the sell flow: sign in the wallet, send, see the listing. */
 async function onConfirmSell(): Promise<void> {
+  if (network === "mainnet") {
+    return;
+  }
   const pending = pendingList;
   const seller = adapter.publicKey;
   if (pending === null || seller === null) {
@@ -690,6 +707,9 @@ async function onConfirmSell(): Promise<void> {
 
 /** Step 1 of the cancel flow: pick an own listing, see what happens. */
 function onSelectCancel(listing: Listing): void {
+  if (network === "mainnet") {
+    return;
+  }
   pendingCancel = listing;
   cancelStatus.textContent = "";
   clearChildren(cancelPreview);
@@ -708,6 +728,9 @@ function onSelectCancel(listing: Listing): void {
 
 /** Step 2 of the cancel flow: sign in the wallet, send, get the NFT back. */
 async function onConfirmCancel(): Promise<void> {
+  if (network === "mainnet") {
+    return;
+  }
   const listing = pendingCancel;
   const seller = adapter.publicKey;
   if (listing === null || seller === null) {
@@ -739,6 +762,44 @@ async function onConfirmCancel(): Promise<void> {
   }
 }
 
+/**
+ * The mainnet guard: while the app is on mainnet, the warning banner
+ * shows. Listing, buying, and cancelling are disabled separately in
+ * `renderListings`, `renderBuySection`, and `renderSellForm`, and
+ * the confirm handlers refuse on mainnet too, so no mainnet
+ * transaction can be attempted against the devnet escrow program.
+ * Called on every network switch and at startup.
+ */
+function updateNetworkGuard(): void {
+  const onMainnet = network === "mainnet";
+  networkWarning.hidden = !onMainnet;
+  if (onMainnet) {
+    networkWarning.textContent = mainnetWarningText();
+  }
+}
+
+/**
+ * Clear the previous network's data from the screen, so a failed read
+ * on the new network never leaves stale stats, listings, or activity
+ * behind (L-9). The listings table is the dangerous one: without this
+ * call, a devnet listing keeps an active Buy button on mainnet.
+ * Called on every network switch, before the refresh runs.
+ */
+function clearStaleViews(): void {
+  statMinted.textContent = "—";
+  statMinters.textContent = "—";
+  statInscriptions.textContent = "—";
+  statListings.textContent = "—";
+  statFloor.textContent = "—";
+  marketNote.textContent = "";
+  listingsNote.textContent = "";
+  clearChildren(activityList);
+  activityEmpty.hidden = false;
+  renderListings();
+  renderBuySection();
+  renderSellForm();
+}
+
 function switchNetwork(next: Network): void {
   if (next === network) {
     return;
@@ -757,6 +818,8 @@ function switchNetwork(next: Network): void {
   buyStatus.textContent = "";
   sellStatus.textContent = "";
   cancelStatus.textContent = "";
+  updateNetworkGuard();
+  clearStaleViews();
   void refresh();
 }
 
@@ -813,4 +876,5 @@ cancelConfirmButton.addEventListener("click", () => {
   void onConfirmCancel();
 });
 
+updateNetworkGuard();
 void refresh();

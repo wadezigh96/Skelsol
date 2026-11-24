@@ -58,6 +58,10 @@
         Sound off
       </button>
     </header>
+    <!-- Mainnet warning banner: shown only while the app is on mainnet
+         (see updateNetworkGuard in main.ts). The demo collection lives
+         on devnet; on mainnet the page warns and disables trading. -->
+    <p id="network-warning" class="skel-warning" role="alert" hidden></p>
     <div id="wallet-picker" class="skel-section" hidden>
       <p class="skel-note">Choose a wallet to connect:</p>
       <div id="wallet-picker-list" class="skel-form-row"></div>

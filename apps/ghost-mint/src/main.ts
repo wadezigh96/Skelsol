@@ -35,6 +35,8 @@ import {
 import {
   formatCostLines,
   lookupSummary,
+  mainnetMintDisabledText,
+  mainnetWarningText,
   mintAllowanceText,
 } from "./view.js";
 import { SITE_CONFIG } from "./site-config.js";
@@ -114,6 +116,7 @@ const walletPicker = element<HTMLElement>("wallet-picker");
 const walletPickerList = element<HTMLElement>("wallet-picker-list");
 const devnetButton = element<HTMLButtonElement>("network-devnet");
 const mainnetButton = element<HTMLButtonElement>("network-mainnet");
+const networkWarning = element<HTMLElement>("network-warning");
 const refreshButton = element<HTMLButtonElement>("refresh-button");
 const statsStatus = element<HTMLElement>("stats-status");
 const marketNoteStatus = element<HTMLElement>("market-note-status");
@@ -268,6 +271,14 @@ function renderActivity(events: ActivityEvent[]): void {
 }
 
 async function refreshAllowance(): Promise<void> {
+  // Mainnet guard: a successful mainnet read must not re-enable the
+  // mint button (see updateNetworkGuard).
+  if (network === "mainnet") {
+    mintAllowance.textContent = mainnetMintDisabledText();
+    mintButton.disabled = true;
+    mintConnectHint.textContent = "";
+    return;
+  }
   const publicKey = adapter.publicKey;
   if (publicKey === null) {
     mintAllowance.textContent = mintAllowanceText(null);
@@ -405,6 +416,10 @@ async function onLookup(): Promise<void> {
 
 /** Step 1 of the mint flow: build the transaction, show the cost. */
 async function onMint(): Promise<void> {
+  if (network === "mainnet") {
+    mintStatus.textContent = mainnetMintDisabledText();
+    return;
+  }
   const publicKey = adapter.publicKey;
   if (publicKey === null) {
     mintStatus.textContent = "Connect Phantom or Solflare before minting.";
@@ -448,6 +463,9 @@ async function onMint(): Promise<void> {
 
 /** Step 2 of the mint flow: sign in the wallet, send, show the link. */
 async function onConfirmMint(): Promise<void> {
+  if (network === "mainnet") {
+    return;
+  }
   const result = pendingMint;
   if (result === null) {
     return;
@@ -479,6 +497,44 @@ async function onConfirmMint(): Promise<void> {
   }
 }
 
+/**
+ * The mainnet guard: while the app is on mainnet, the warning banner
+ * shows and minting is disabled. The demo collection lives on devnet;
+ * a mainnet mint would spend real SOL on a demo inscription. Called
+ * on every network switch and at startup, so the button is disabled
+ * even when the mainnet read fails and `refreshAllowance` never runs.
+ */
+function updateNetworkGuard(): void {
+  const onMainnet = network === "mainnet";
+  networkWarning.hidden = !onMainnet;
+  if (!onMainnet) {
+    return;
+  }
+  networkWarning.textContent = mainnetWarningText();
+  mintAllowance.textContent = mainnetMintDisabledText();
+  mintButton.disabled = true;
+  mintConnectHint.textContent = "";
+}
+
+/**
+ * Clear the previous network's data from the screen, so a failed read
+ * on the new network never leaves stale numbers, leaderboard rows, or
+ * activity behind (L-9). Called on every network switch, before the
+ * refresh for the new network runs.
+ */
+function clearStaleViews(): void {
+  statMinted.textContent = "—";
+  statMinters.textContent = "—";
+  statInscriptions.textContent = "—";
+  statListings.textContent = "—";
+  statFloor.textContent = "—";
+  marketNoteStatus.textContent = "Checking the market…";
+  clearChildren(leaderboardBody);
+  leaderboardEmpty.hidden = false;
+  clearChildren(activityList);
+  activityEmpty.hidden = false;
+}
+
 function switchNetwork(next: Network): void {
   if (next === network) {
     return;
@@ -500,6 +556,8 @@ function switchNetwork(next: Network): void {
   mintConfirmButton.hidden = true;
   mintStatus.textContent = "";
   lookupResult.textContent = "";
+  updateNetworkGuard();
+  clearStaleViews();
   void refresh();
 }
 
@@ -566,4 +624,5 @@ mintConfirmButton.addEventListener("click", () => {
 
 startGraveyardVideo();
 
+updateNetworkGuard();
 void refresh();

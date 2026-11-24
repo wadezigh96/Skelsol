@@ -227,6 +227,28 @@ export function marketUnavailableText(network: Network): string {
   );
 }
 
+/**
+ * The warning banner shown while the app is on mainnet: real money,
+ * and the demo collection lives on devnet. Shown by
+ * `updateNetworkGuard` in `main.ts`.
+ */
+export function mainnetWarningText(): string {
+  return (
+    "You are on mainnet: transactions here use real SOL. " +
+    "This demo collection (GHOST) lives on devnet — listing, buying, " +
+    "and cancelling are disabled here. Switch back to devnet to try " +
+    "the demo for free."
+  );
+}
+
+/** The sell form's note while the app is on mainnet. */
+export function mainnetTradingDisabledText(): string {
+  return (
+    "Listing, buying, and cancelling are disabled on mainnet. " +
+    "Switch back to devnet to trade."
+  );
+}
+
 /** The empty state shown when the market is deployed but has no listings. */
 export function emptyListingsText(): string {
   return "No listings yet. List a carrier NFT below to open the first one.";

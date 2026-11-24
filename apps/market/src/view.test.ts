@@ -16,6 +16,8 @@ import {
   emptyListingsText,
   floorPrice,
   listingRow,
+  mainnetTradingDisabledText,
+  mainnetWarningText,
   marketUnavailableText,
   parseSolPrice,
   salePreview,
@@ -274,6 +276,26 @@ describe("marketUnavailableText", () => {
         "the program is deployed.",
     );
     expect(marketUnavailableText("mainnet")).toContain("mainnet");
+  });
+});
+
+describe("mainnetWarningText", () => {
+  it("warns that mainnet uses real money and the demo lives on devnet", () => {
+    expect(mainnetWarningText()).toBe(
+      "You are on mainnet: transactions here use real SOL. " +
+        "This demo collection (GHOST) lives on devnet — listing, buying, " +
+        "and cancelling are disabled here. Switch back to devnet to try " +
+        "the demo for free.",
+    );
+  });
+});
+
+describe("mainnetTradingDisabledText", () => {
+  it("says listing, buying, and cancelling are disabled on mainnet", () => {
+    expect(mainnetTradingDisabledText()).toBe(
+      "Listing, buying, and cancelling are disabled on mainnet. " +
+        "Switch back to devnet to trade.",
+    );
   });
 });
 

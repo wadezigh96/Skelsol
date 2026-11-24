@@ -14,6 +14,8 @@ import {
 import {
   formatCostLines,
   lookupSummary,
+  mainnetMintDisabledText,
+  mainnetWarningText,
   mintAllowanceText,
 } from "./view.js";
 
@@ -112,6 +114,24 @@ describe("mintAllowanceText", () => {
         reason: "Per-wallet limit reached.",
       }),
     ).toBe("Per-wallet limit reached.");
+  });
+});
+
+describe("mainnetWarningText", () => {
+  it("warns that mainnet uses real money and the demo lives on devnet", () => {
+    expect(mainnetWarningText()).toBe(
+      "You are on mainnet: transactions here use real SOL. " +
+        "This demo collection (GHOST) lives on devnet — minting is " +
+        "disabled here. Switch back to devnet to try the demo for free.",
+    );
+  });
+});
+
+describe("mainnetMintDisabledText", () => {
+  it("says minting is disabled on mainnet", () => {
+    expect(mainnetMintDisabledText()).toBe(
+      "Minting is disabled on mainnet. Switch back to devnet to mint.",
+    );
   });
 });
 

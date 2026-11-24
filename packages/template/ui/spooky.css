@@ -558,6 +558,19 @@ a {
   font-size: 0.9rem;
 }
 
+/* Mainnet warning banner: the demo collection lives on devnet, so a
+ * visitor on mainnet gets a plain-words warning instead of a silent
+ * switch to real money. Same raised box as .skel-status, with the
+ * bright accent border so it reads as a warning, not a note. */
+.skel-warning {
+  border: 1px solid var(--skel-accent-bright);
+  background: var(--skel-bg-raised);
+  color: var(--skel-text);
+  font-weight: 600;
+  padding: 1rem 1.25rem;
+  margin: 1.5rem 2rem 0;
+}
+
 .skel-status {
   border: 1px solid var(--skel-line);
   padding: 1rem 1.25rem;
@@ -698,6 +711,11 @@ a {
   .skel-footer {
     padding-left: 1rem;
     padding-right: 1rem;
+  }
+
+  .skel-warning {
+    margin-left: 1rem;
+    margin-right: 1rem;
   }
 
   /* The top bar holds four items now (wordmark, network switch,
